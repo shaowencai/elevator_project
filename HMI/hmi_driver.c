@@ -5,6 +5,14 @@
 
 static Hmi_driverT hmi_driver =
 {
+//    {GPIO_Speed_50MHz,GPIO_Pin_10,GPIOB,GPIO_Mode_AF_PP,0},//TX_pin
+//    {GPIO_Speed_50MHz,GPIO_Pin_11,GPIOB,GPIO_Mode_IN_FLOATING,0},//Rx_pin
+//    
+//    {USART3,115200,USART_StopBits_1,USART_Parity_No,
+//#if USART_RX_IT
+//        USART3_IRQn
+//#endif
+//    },
     {GPIO_Speed_50MHz,GPIO_Pin_9,GPIOA,GPIO_Mode_AF_PP,0},//TX_pin
     {GPIO_Speed_50MHz,GPIO_Pin_10,GPIOA,GPIO_Mode_IN_FLOATING,0},//Rx_pin
     
@@ -12,23 +20,31 @@ static Hmi_driverT hmi_driver =
 #if USART_RX_IT
         USART1_IRQn
 #endif
-    }
-    
+    },
+    {TIM2,TIM2_IRQn,60000},
+    0
 };
 
 
 static void hmi_driver_rcc_config()
 {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);//复用引脚就需要使能AFIO时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1|RCC_APB2Periph_GPIOA, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE); 
+//    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+//    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
 }
 
-void  hmi_driver_init(void)
+void  hmi_driver_init(void (*Updata_Fun)(void))
 {   
     hmi_driver_rcc_config();
     Pin_Init(&(hmi_driver.Tx_pin));
     Pin_Init(&(hmi_driver.Rx_pin));
     USARTx_Init(&(hmi_driver.usart));
+    Timerx_Init(&(hmi_driver.timer));
+    hmi_driver.Hmi_Updata = Updata_Fun;
+    open_timer(&(hmi_driver.timer));
 }
 
 void SendChar(uchar t)
@@ -38,6 +54,15 @@ void SendChar(uchar t)
 }
 
 
+//void USART3_IRQHandler()
+//{
+//    uint8 data;
+//    if(USART_GetITStatus(USART3,USART_IT_RXNE) != RESET)
+//    {
+//        data = USART_ReceiveData(USART3);
+//        queue_push(data);
+//    }
+//}
 void USART1_IRQHandler()
 {
     uint8 data;
@@ -47,6 +72,20 @@ void USART1_IRQHandler()
         queue_push(data);
     }
 }
+
+
+void TIM2_IRQHandler(void)   //TIM2中断
+{
+	if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)  
+    {
+        if(hmi_driver.Hmi_Updata)
+        {
+            hmi_driver.Hmi_Updata();
+        }
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update); 
+    }
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -676,14 +715,14 @@ void SetButtonValue(uint16 screen_id,uint16 control_id,uchar state)
 	END_CMD();
 }
 
-void SetTextValue(uint16 screen_id,uint16 control_id,uchar *str)
+void SetTextValue(uint16 screen_id,uint16 control_id,char *str)
 {
 	BEGIN_CMD();
 	TX_8(0xB1);
 	TX_8(0x10);
 	TX_16(screen_id);
 	TX_16(control_id);
-	SendStrings(str);
+	SendStrings((uchar *)str);
 	END_CMD();
 }
 
@@ -1004,6 +1043,29 @@ void ShowPopupMenu(uint16 screen_id,uint16 control_id,uint8 show,uint16 focus_co
 	END_CMD();
 }
 
+void Showchart(uint16 screen_id,uint16 control_id,uint8 *tab[],uint8 num)
+{
+    uint8 i;
+    uint8 j;
+    BEGIN_CMD();
+    TX_8(0xB1);
+    TX_8(0x52);
+    TX_16(screen_id);
+	TX_16(control_id);
+    
+    for (i=0;i<num;i++)
+    {
+        j=0;
+        while(tab[i][j]!='\0')
+        {
+            TX_8(tab[i][j]);
+            j++;
+        }
+        TX_8(0x3B);
+    }
+    END_CMD();
+}
+    
 void ShowKeyboard(uint8 show,uint16 x,uint16 y,uint8 type,uint8 option,uint8 max_len)
 {
 	BEGIN_CMD();
@@ -1016,3 +1078,4 @@ void ShowKeyboard(uint8 show,uint16 x,uint16 y,uint8 type,uint8 option,uint8 max
 	TX_8(max_len);
 	END_CMD();
 }
+

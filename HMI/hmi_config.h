@@ -5,6 +5,8 @@
 #define CMD_MAX_SIZE 20        /*!<单条指令大小，根据需要调整，尽量设置大一些*/
 #define QUEUE_MAX_SIZE 80      /*!< 指令接收缓冲区大小，根据需要调整，尽量设置大一些*/
 
+#define CMD_HEAD 0XEE  //帧头
+#define CMD_TAIL 0XFFFCFFFF //帧尾
 
 #define uchar   unsigned char
 #define uint8   unsigned char

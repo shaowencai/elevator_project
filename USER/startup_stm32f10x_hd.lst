@@ -553,8 +553,9 @@ ARM Macro Assembler    Page 9
               00000000 
 Command Line: --debug --xref --cpu=Cortex-M3 --apcs=interwork --depend=..\obj\s
 tartup_stm32f10x_hd.d -o..\obj\startup_stm32f10x_hd.o -ID:\MDK\ARM\RV31\INC -ID
-:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include -IDevice\Include --predefine="__MI
-CROLIB SETA 1" --list=.\startup_stm32f10x_hd.lst ..\CORE\startup_stm32f10x_hd.s
+:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include -ID:\MDK\ARM\Inc\ST\STM32F10x --pr
+edefine="__MICROLIB SETA 1" --list=.\startup_stm32f10x_hd.lst ..\CORE\startup_s
+tm32f10x_hd.s
 
 
 

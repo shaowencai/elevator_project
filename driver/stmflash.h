@@ -3,7 +3,7 @@
  
 #include "stm32f10x.h"  
 
-#define STM32_FLASH_SIZE 512 	 		//所选STM32的FLASH容量大小(单位为K)
+#define STM32_FLASH_SIZE 128 	 		//所选STM32的FLASH容量大小(单位为K)
 
 
 #if STM32_FLASH_SIZE<256

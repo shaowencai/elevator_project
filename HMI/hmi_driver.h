@@ -3,16 +3,18 @@
 
 #include "usartx.h"
 #include "Pin.h"
- 
+#include "timer.h"
 
 typedef struct
 {
-    Pin_T  Tx_pin;
-    Pin_T  Rx_pin;
-    UsartT usart; 
+    Pin_T   Tx_pin;
+    Pin_T   Rx_pin;
+    UsartT  usart; 
+    TimerT  timer; 
+    void  (*Hmi_Updata)(void);
 }Hmi_driverT;
 
-void  hmi_driver_init(void);
+void  hmi_driver_init(void (*Updata_Fun)(void));
 
 /*! 
  *  \brief  检查数据是否符合CRC16校验
@@ -237,11 +239,7 @@ void GUI_Ellipse (uint16 x0, uint16 y0, uint16 x1,uint16 y1 );
 void GUI_EllipseFill (uint16 x0, uint16 y0, uint16 x1,uint16 y1 );
 
 /*! 
- *  \brief  画线
- *  \param  x0 起始位置X坐标
- *  \param  y0 起始位置Y坐标
- *  \param  x1 结束位置X坐标
- *  \param  y1 结束位置Y坐标
+ *  \brief    设置背景光强度
  */
 void SetBackLight(uint8 light_level);
 
@@ -387,7 +385,7 @@ void SetButtonValue(uint16 screen_id,uint16 control_id,uchar value);
  *  \param  control_id 控件ID
  *  \param  str 文本值
  */
-void SetTextValue(uint16 screen_id,uint16 control_id,uchar *str);
+void SetTextValue(uint16 screen_id,uint16 control_id,char *str);
 
 /*! 
  *  \brief  设置进度值
@@ -629,5 +627,8 @@ void ShowPopupMenu(uint16 screen_id,uint16 control_id,uint8 show,uint16 focus_co
  *  \param  max_len 键盘录入字符长度限制
  */
 void ShowKeyboard(uint8 show,uint16 x,uint16 y,uint8 type,uint8 option,uint8 max_len);
+
+void Showchart(uint16 screen_id,uint16 control_id,uint8 *tab[],uint8 num);
+
 
 #endif

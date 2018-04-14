@@ -1,323 +1,845 @@
 #include "hmi_process.h"
+#include <string.h>
+#include "delay.h"
+#include "motor.h"
+#include "printer.h"
+#include "hmi_process.h"
+#include "stdio.h"
+#include "stmflash.h"
+
+static Hmi_Dev  hmi_dev; //¶¨ÒåHMIÉè±¸ 
+
+#define PARAM_SAVE_ADDR   ((0x8000000+0x80000/4-sizeof(elevator))-(0x8000000+0x80000/4-sizeof(elevator))%4)
+#define PARAM_HEAD_ADDR   ((PARAM_SAVE_ADDR-sizeof(head))-(PARAM_SAVE_ADDR-sizeof(head))%4)
+
+#pragma pack(push)
+#pragma pack(1)	//°´×Ö½Ú¶ÔÆë
+typedef struct
+{
+    uint8 year;
+    uint8 month;
+    uint8 week;
+    uint8 day;
+    uint8 hour;
+    uint8 minute;
+    uint8 second;
+}DateT;
+#pragma pack(pop)
 
 
-static uint8 cmd_buffer[CMD_MAX_SIZE];	    //æŒ‡ä»¤ç¼“å­˜
-static uint16 current_screen_id = 0;		//å½“å‰ç”»é¢ID
-static int32 test_value = 0;               //æµ‹è¯•å€¼
-static uint32 update_en = 0;                //æ›´æ–°æ ‡è®°
+#pragma pack(push)
+#pragma pack(4)	//°´4×Ö½Ú¶ÔÆë
+typedef struct
+{  
+    char Register_Code[20]; //×¢²á´úÂë
+    char Factory_Numbe[10]; //³ö³§±àºÅ
+    DateT Date;
+    char Spec_Mode[15];     //¹æ¸ñĞÍºÅ
+    char Dir;               //µ¥Ë«·½Ïò 0µ¥Ïò 1Ë«Ïò
+    char Rated_Speed[4];    //¶î¶¨ËÙ¶È
+    char Up_Elec_Speed[4];  //ÉÏĞĞµçÆøËÙ¶È       
+    char Up_Mach_Speed[4];  //ÉÏĞĞ»úĞµËÙ¶È       
+    char Up_Result;         //ÉÏĞĞ½á¹û 1Òì³£ 2Õı³£ 0ÎŞĞ§
+    char Down_Elec_Speed[4];//ÏÂĞĞµçÆøËÙ¶È      
+    char Down_Mach_Speed[4];//ÏÂĞĞ»úĞµËÙ¶È       
+    char Down_Result;       //ÏÂĞĞ½á¹û 1Òì³£ 2Õı³£ 0ÎŞĞ§
+}Elevator_ParamT;
+#pragma pack(pop)
+
+typedef struct
+{
+    unsigned int deedbeef;
+    unsigned int begin_number;
+    unsigned int end_number;
+}Elevator_HeadT;
+
+
+
+Elevator_ParamT elevator[100] = {0};
+Elevator_HeadT  head= {0x12345678,0,0};   
+unsigned int  current_number;
+unsigned char dir_flag=0;
+unsigned char Find_flag=0;//0 °´×¢²á´úÂë²éÑ¯  1°´³ö³§±àºÅ²éÑ¯  2°´²âÊÔÊ±¼ä²éÑ¯
+char Match_Register_Code[20];
+char Match_Factory_Numbe[10];
+char Match_Date[15];
+int  find_begin_number = -1;
+int  find_cur_begin_number = -1;
+int  find_cur_end_number = -1;
+int  find_end_number = -1;
+float current_show_speed = 0.5;
+unsigned char motor_open_flag =0; //0¹Ø±Õ 1´ò¿ª
+
+void Run_Print(void)
+{
+    char buf[50];
+    SendStringToPrint("\r\n");
+    SendStringToPrint("------<<ÏŞËÙÆ÷²âÊÔ±¨¸æ>>------\r\n");
+    SendStringToPrint("\r\n");
+    sprintf(buf,"×¢²á´úÂë£º%s\r\n",elevator[current_number].Register_Code);
+    SendStringToPrint(buf);
+    sprintf(buf,"³ö³§±àºÅ£º%s\r\n",elevator[current_number].Factory_Numbe);
+    SendStringToPrint(buf);
+    sprintf(buf,"¹æ¸ñĞÍºÅ£º%s\r\n",elevator[current_number].Spec_Mode);
+    SendStringToPrint(buf);
+    if(elevator[current_number].Dir == 0)SendStringToPrint("µ¥Ë«·½Ïò£ºµ¥Ïò\r\n");
+    else if(elevator[current_number].Dir == 1) SendStringToPrint("µ¥Ë«·½Ïò£ºË«Ïò\r\n");
+    sprintf(buf,"¶î¶¨ËÙ¶È£º%s(m/s)",elevator[current_number].Rated_Speed);
+    SendStringToPrint(buf);
+    SendStringToPrint(" [±ê×¼:Vx~Vy]\r\n");
+    SendStringToPrint("\r\n");
+    SendStringToPrint("·½Ïò µçÆøËÙ¶ÈV1 »úĞµËÙ¶ÈV2  ½á¹û\r\n");
+    SendStringToPrint("ÉÏĞĞ");
+    
+    if(elevator[current_number].Up_Result == 0)
+    {
+        SendStringToPrint("     \\          \\       \\\r\n");
+    }
+    else if(elevator[current_number].Up_Result == 1)
+    {
+        SendStringToPrint("     \\          \\      Òì³£\r\n");
+    }
+    else if(elevator[current_number].Up_Result == 2)
+    {
+        sprintf(buf," %s(m/s) %s(m/s)  ",elevator[current_number].Up_Elec_Speed,\
+                                             elevator[current_number].Up_Mach_Speed);
+        SendStringToPrint(buf);
+        SendStringToPrint("Õı³£\r\n");
+    }
+    SendStringToPrint("ÏÂĞĞ");
+    if(elevator[current_number].Down_Result == 0)
+    {
+        SendStringToPrint("     \\          \\       \\\r\n");
+    }
+    else if(elevator[current_number].Down_Result == 1)
+    {
+        SendStringToPrint("     \\          \\      Òì³£\r\n");
+    }
+    else if(elevator[current_number].Down_Result == 2)
+    {
+        sprintf(buf," %s(m/s) %s(m/s)  ",elevator[current_number].Down_Elec_Speed,\
+                                                     elevator[current_number].Down_Mach_Speed);
+        SendStringToPrint(buf);
+        SendStringToPrint("Õı³£\r\n");
+    }
+    SendStringToPrint("\r\n");
+    SendStringToPrint("\r\n");
+    sprintf(buf,"------<<20%d-%d-%d %d:%d>>------\r\n",(int)elevator[current_number].Date.year,\
+                                                  (int)elevator[current_number].Date.month,\
+                                                  (int)elevator[current_number].Date.day,\
+                                                  (int)elevator[current_number].Date.hour,\
+                                                  (int)elevator[current_number].Date.minute);
+    SendStringToPrint(buf);
+    SendStringToPrint("\r\n");
+    SendStringToPrint("\r\n");
+    SendStringToPrint("\r\n");
+    SendStringToPrint("\r\n");
+}
+
 
 
 
 /*! 
- *  \brief  ç”»é¢åˆ‡æ¢é€šçŸ¥
- *  \details  å½“å‰ç”»é¢æ”¹å˜æ—¶(æˆ–è°ƒç”¨GetScreen)ï¼Œæ‰§è¡Œæ­¤å‡½æ•°
- *  \param screen_id å½“å‰ç”»é¢ID
+ *  \brief      »­ÃæÇĞ»»Í¨Öª
+ *  \details    µ±Ç°»­Ãæ¸Ä±äÊ±(»òµ÷ÓÃGetScreen)£¬Ö´ĞĞ´Ëº¯Êı
+ *  \param      screen_id µ±Ç°»­ÃæID
  */
 static void NotifyScreen(uint16 screen_id)
 {
-	current_screen_id = screen_id;//åœ¨å·¥ç¨‹é…ç½®ä¸­å¼€å¯ç”»é¢åˆ‡æ¢é€šçŸ¥ï¼Œè®°å½•å½“å‰ç”»é¢ID
-
-	if(current_screen_id==4)//æ¸©åº¦æ›²çº¿
-	{
-		uint16 i = 0;
-		uint8 dat[100] = {0};
-
-		//ç”Ÿæˆæ–¹æ³¢
-		for (i=0;i<100;++i)
-		{
-			if((i%20)>=10)
-				dat[i] = 200;
-			else
-				dat[i] = 20;
-		}
-		GraphChannelDataAdd(4,1,0,dat,100);//æ·»åŠ æ•°æ®åˆ°é€šé“0
-
-		//ç”Ÿæˆé”¯é½¿æ³¢
-		for (i=0;i<100;++i)
-		{
-			dat[i] = 16*(i%15);
-		}
-		GraphChannelDataAdd(4,1,1,dat,100);//æ·»åŠ æ•°æ®åˆ°é€šé“1
-	}
-	else if(current_screen_id==9)//äºŒç»´ç 
-	{
-		//äºŒç»´ç æ§ä»¶æ˜¾ç¤ºä¸­æ–‡å­—ç¬¦æ—¶ï¼Œéœ€è¦è½¬æ¢ä¸ºUTF8ç¼–ç ï¼Œ
-		//é€šè¿‡â€œæŒ‡ä»¤åŠ©æ‰‹â€ï¼Œè½¬æ¢â€œå¹¿å·å¤§å½©123â€ ï¼Œå¾—åˆ°å­—ç¬¦ä¸²ç¼–ç å¦‚ä¸‹
-		uint8 dat[] = {0xE5,0xB9,0xBF,0xE5,0xB7,0x9E,0xE5,0xA4,0xA7,0xE5,0xBD,0xA9,0x31,0x32,0x33};
-		SetTextValue(9,1,dat);
-	}
+    uchar i=0;
+	hmi_dev.current_screen_id = screen_id;//ÔÚ¹¤³ÌÅäÖÃÖĞ¿ªÆô»­ÃæÇĞ»»Í¨Öª£¬¼ÇÂ¼µ±Ç°»­ÃæID
+    
+    if(screen_id == 0)
+    {
+        //Çå³ıÆäËû½çÃæµÄÀúÊ·Êı¾İ
+        for(i=1; i<=5; i++) SetTextValue(1,i,"\0");
+        for(i=5; i<=15; i++)SetTextValue(2,i,"\0");
+        for(i=1; i<=3; i++) SetTextValue(4,i,"\0");
+        for(i=1; i<=8; i++) SetTextValue(5,i,"\0");
+        for(i=6; i<=33; i++) SetTextValue(4,i,"\0");
+        GraphChannelDataClear(5,14,0);
+        GraphChannelDataClear(5,15,0);
+        current_number = head.end_number;
+    }
 }
 
 /*! 
- *  \brief  è§¦æ‘¸åæ ‡äº‹ä»¶å“åº”
- *  \param press 1æŒ‰ä¸‹è§¦æ‘¸å±ï¼Œ3æ¾å¼€è§¦æ‘¸å±
- *  \param x xåæ ‡
- *  \param y yåæ ‡
+ *  \brief  ´¥Ãş×ø±êÊÂ¼şÏìÓ¦
+ *  \param  press 1°´ÏÂ´¥ÃşÆÁ£¬3ËÉ¿ª´¥ÃşÆÁ
+ *  \param  x x×ø±ê
+ *  \param  y y×ø±ê
  */
 static void NotifyTouchXY(uint8 press,uint16 x,uint16 y)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
+	
 }
 
+#if 0
 static void SetTextValueInt32(uint16 screen_id, uint16 control_id,int32 value)
 {
 	uchar buffer[12] = {0};
-	sprintf((char *)buffer,"%ld",value); //æŠŠæ•´æ•°è½¬æ¢ä¸ºå­—ç¬¦ä¸²
+	sprintf((char *)buffer,"%ld",value); //°ÑÕûÊı×ª»»Îª×Ö·û´®
 	SetTextValue(screen_id,control_id,buffer);
 }
 
 static void SetTextValueFloat(uint16 screen_id, uint16 control_id,float value)
 {
 	uchar buffer[12] = {0};
-	sprintf((char *)buffer,"%.1f",value);//æŠŠæµ®ç‚¹æ•°è½¬æ¢ä¸ºå­—ç¬¦ä¸²(ä¿ç•™ä¸€ä½å°æ•°)
+	sprintf((char *)buffer,"%.1f",value);//°Ñ¸¡µãÊı×ª»»Îª×Ö·û´®(±£ÁôÒ»Î»Ğ¡Êı)
 	SetTextValue(screen_id,control_id,buffer);
 }
+#endif
 
-static void UpdateUI()
+static void UpdateUI(void) 
 {
-	if(current_screen_id==2)//æ–‡æœ¬è®¾ç½®å’Œæ˜¾ç¤º
-	{
-		//å½“å‰ç”µæµã€æ¸©åº¦ä»0åˆ°100å¾ªç¯æ˜¾ç¤ºï¼Œè‰ºæœ¯å­—ä»0.0-99.9å¾ªç¯æ˜¾ç¤º
-		SetTextValueInt32(2,5,test_value%100);//å½“å‰ç”µæµ
-		SetTextValueInt32(2,6,test_value%100);//æ¸©åº¦
-		SetTextValueFloat(2,7,(test_value%1000)/10.0);//è‰ºæœ¯å­—
+    unsigned char value;
+    char buf[10];
+    float temp_speed;//ÁÙÊ±ËÙ¶È±äÁ¿
+    
+    switch (hmi_dev.current_screen_id)
+    {
+        case 5:
+            if(motor_open_flag == 1)
+            {
+                if(dir_flag == 0)
+                {
+                    Set_Motor_Speed(current_show_speed);
+                    value = current_show_speed*80;
+                    GraphChannelDataAdd(5,14,0,&value,1);
+                    sprintf(buf,"%3.2fm/s",current_show_speed);
+                    SetTextValue(5,1,buf);
+                    if(current_show_speed < 1.7)
+                    {
+                        temp_speed  = Get_Elec_Speed();
+                        
+                        if(temp_speed > 0.0001)
+                        {
+                            sprintf(elevator[current_number].Up_Elec_Speed,"%3.2fm/s",temp_speed);
+                            SetTextValue(5,2,elevator[current_number].Up_Elec_Speed);
+                        }
+                        temp_speed  = Get_Mach_Speed();
+                        
+                        if(temp_speed > 0.0001)
+                        {
+                            sprintf(elevator[current_number].Up_Mach_Speed,"%3.2fm/s",temp_speed);
+                            SetTextValue(5,3,elevator[current_number].Up_Mach_Speed);
+                            elevator[current_number].Up_Result = 2;
+                            SetTextValue(5,4,"Õı³£");
+                            motor_open_flag = 0;
+                        }
+                        
+                    }
+                    else
+                    {
+                        motor_stop();
+                        SetTextValue(5,2,"\\");
+                        SetTextValue(5,3,"\\");
+                        elevator[current_number].Up_Result = 1;
+                        SetTextValue(5,4,"Òì³£");
+                        motor_open_flag = 0;
+                    }
+         
+                }
+                else
+                {
+                    Set_Motor_Speed(current_show_speed);
+                    value = current_show_speed*80;
+                    GraphChannelDataAdd(5,15,0,&value,1);
+                    sprintf(buf,"%3.2fm/s",current_show_speed);
+                    SetTextValue(5,5,buf);
+                    if(current_show_speed < 1.7)
+                    {
+                        temp_speed  = Get_Elec_Speed();
+                        
+                        if(temp_speed > 0.0001)
+                        {
+                            sprintf(elevator[current_number].Down_Elec_Speed,"%3.2fm/s",temp_speed);
+                            SetTextValue(5,6,elevator[current_number].Down_Elec_Speed);
+                        }
+                        temp_speed  = Get_Mach_Speed();
+                        
+                        if(temp_speed > 0.0001)
+                        {
+                            sprintf(elevator[current_number].Down_Mach_Speed,"%3.2fm/s",temp_speed);
+                            SetTextValue(5,7,elevator[current_number].Down_Mach_Speed);
+                            elevator[current_number].Down_Result = 2;
+                            SetTextValue(5,8,"Õı³£");
+                            motor_open_flag = 0;
+                        }
+                        
+                    }
+                    else
+                    {
+                        motor_stop();
+                        SetTextValue(5,6,"\\");
+                        SetTextValue(5,7,"\\");
+                        elevator[current_number].Down_Result = 1;
+                        SetTextValue(5,8,"Òì³£");
+                        motor_open_flag = 0;
+                    }
+                }
+                current_show_speed = current_show_speed+0.02;
+            }
+            break;
+        default:
+            break;
+    }
+}
 
-		++test_value;
-	}
-	else if(current_screen_id==5)//è¿›åº¦æ¡å’Œæ»‘å—æ§åˆ¶
-	{
-		SetProgressValue(5,1,test_value%100);
 
-		++test_value;
-	}
-	else if(current_screen_id==6)//ä»ªè¡¨æ§ä»¶
-	{
-		SetMeterValue(6,1,test_value%360);
-		SetMeterValue(6,2,test_value%360);
+void Find(void)
+{
+    unsigned char i;
+    char buf[15];
+    find_end_number = -1;
+    find_begin_number = -1;
+    
+    if(Find_flag == 0)
+    {
+        for(i=0;i<100;i++)
+        {
+            if(!strcmp(elevator[i].Register_Code,Match_Register_Code))
+            {
+                find_begin_number = i;
+                break;
+            }
+        }
+        if(i == 100) return;
+        if(i == 99) {find_end_number = i; return;}
+        for(i=find_begin_number+1;i<100;i++)
+        {
+            if(strcmp(elevator[i].Register_Code,Match_Register_Code))//²»Æ¥ÅäºóÍ£Ö¹
+            {
+                find_end_number = i-1;
+                break;
+            }
+        }
+        if(i == 100) find_end_number = 99;//Ò»Ö±Æ¥Åä Ôò½áÊøÎª×îºóÒ»¸ö
+     
+    } 
+    else if(Find_flag == 1)
+    {
+        for(i=0;i<100;i++)
+        {
+            if(!strcmp(elevator[i].Factory_Numbe,Match_Factory_Numbe))
+            {
+                find_begin_number = i;
+                break;
+            }
+        }
+        if(i == 100) return;
+        if(i == 99) {find_end_number = i; return;}
+        for(i=find_begin_number+1;i<100;i++)
+        {
+            if(strcmp(elevator[i].Factory_Numbe,Match_Factory_Numbe))//²»Æ¥ÅäºóÍ£Ö¹
+            {
+                find_end_number = i-1;
+                break;
+            }
+        }
+        if(i == 100) find_end_number = 99;//Ò»Ö±Æ¥Åä Ôò½áÊøÎª×îºóÒ»¸ö
+     
+    }
+    else if(Find_flag == 2)
+    {
+        for(i=0;i<100;i++)
+        {
+            sprintf(buf,"20%d.%d.%d",elevator[i].Date.year,\
+            elevator[i].Date.month,elevator[i].Date.day);
+            if(!strcmp(buf,Match_Date))
+            {
+                find_begin_number = i;
+                break;
+            }
+        }
+        if(i == 100) return;
+        if(i == 99) {find_end_number = i; return;}
+        for(i=find_begin_number+1;i<100;i++)
+        {
+            sprintf(buf,"20%d.%d.%d",elevator[i].Date.year,\
+            elevator[i].Date.month,elevator[i].Date.day);
+            if(strcmp(buf,Match_Date))//²»Æ¥ÅäºóÍ£Ö¹
+            {
+                find_end_number = i-1;
+                break;
+            }
+        }
+        if(i == 100) find_end_number = 99;//Ò»Ö±Æ¥Åä Ôò½áÊøÎª×îºóÒ»¸ö
+    }
 
-		++test_value;
-	}
+}
+void List_Show(void)
+{
+    unsigned char i;
+    char buf[15];
+    for(i=0;i<(find_cur_end_number-find_cur_begin_number+1);i++)
+    {
+        sprintf(buf,"20%d.%d.%d",elevator[find_cur_begin_number+i].Date.year,\
+                elevator[find_cur_begin_number+i].Date.month,elevator[find_cur_begin_number+i].Date.day);
+        SetTextValue(4,6+i*7,buf);//²âÊÔÊ±¼ä
+        SetTextValue(4,7+i*7,elevator[find_cur_begin_number+i].Register_Code);//×¢²á´úÂë
+        SetTextValue(4,8+i*7,elevator[find_cur_begin_number+i].Factory_Numbe);
+        SetTextValue(4,9+i*7,elevator[find_cur_begin_number+i].Spec_Mode);
+        if(elevator[find_cur_begin_number+i].Dir == 0)
+            SetTextValue(4,10+i*7,"µ¥Ïò");
+        else if(elevator[find_cur_begin_number+i].Dir == 1)
+            SetTextValue(4,10+i*7,"Ë«Ïò");
+        SetTextValue(4,11+i*7,elevator[find_cur_begin_number+i].Rated_Speed);
+        if(elevator[find_cur_begin_number+i].Up_Result != 1 \
+            &&elevator[find_cur_begin_number+i].Down_Result != 1)
+        {
+            SetTextValue(4,12+i*7,"Õı³£");
+        }
+        else
+        {
+           SetTextValue(4,12+i*7,"Òì³£"); 
+        }
+        
+    }
+}
+
+void Show_screen_2(void)
+{
+    SetTextValue(2,5,elevator[current_number].Register_Code);//×¢²á´úÂë
+    SetTextValue(2,6,elevator[current_number].Factory_Numbe);
+    SetTextValue(2,7,elevator[current_number].Spec_Mode);
+    if(elevator[current_number].Dir == 0)
+        SetTextValue(2,8,"µ¥Ïò");
+    else if(elevator[current_number].Dir == 1)
+        SetTextValue(2,8,"Ë«Ïò");
+    SetTextValue(2,9,elevator[current_number].Rated_Speed);
 }
 
 /*! 
- *  \brief  æŒ‰é’®æ§ä»¶é€šçŸ¥
- *  \details  å½“æŒ‰é’®çŠ¶æ€æ”¹å˜(æˆ–è°ƒç”¨GetControlValue)æ—¶ï¼Œæ‰§è¡Œæ­¤å‡½æ•°
- *  \param screen_id ç”»é¢ID
- *  \param control_id æ§ä»¶ID
- *  \param state æŒ‰é’®çŠ¶æ€ï¼š0å¼¹èµ·ï¼Œ1æŒ‰ä¸‹
+ *  \brief      °´Å¥¿Ø¼şÍ¨Öª
+ *  \details    µ±°´Å¥×´Ì¬¸Ä±ä(»òµ÷ÓÃGetControlValue)Ê±£¬Ö´ĞĞ´Ëº¯Êı
+ *  \param      screen_id »­ÃæID
+ *  \param      control_id ¿Ø¼şID
+ *  \param      state °´Å¥×´Ì¬£º0µ¯Æğ£¬1°´ÏÂ
  */
+
 static void NotifyButton(uint16 screen_id, uint16 control_id, uint8  state)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
-	if(screen_id==3)//æŒ‰é’®ã€å›¾æ ‡ã€åŠ¨ç”»æ§åˆ¶
-	{
-		if(control_id==3)//è¿è¡ŒæŒ‰é’®
-		{
-			if(state==0)//åœæ­¢è¿è¡Œ
-			{				
-				AnimationPlayFrame(3,1,1);//æ˜¾ç¤ºåœæ­¢å›¾æ ‡
-				AnimationStop(3,2);//åŠ¨ç”»åœæ­¢æ’­æ”¾
-			}
-			else//å¼€å§‹è¿è¡Œ
-			{				
-				SetControlVisiable(3,1,1);//æ˜¾ç¤ºå›¾æ ‡
-				SetControlVisiable(3,2,1);//æ˜¾ç¤ºåŠ¨ç”»
-
-				AnimationPlayFrame(3,1,0);//æ˜¾ç¤ºè¿è¡Œå›¾æ ‡
-				AnimationStart(3,2);//åŠ¨ç”»å¼€å§‹æ’­æ”¾
-			}		
-		}
-		else if(control_id==4)//å¤ä½æŒ‰é’®
-		{
-			SetControlVisiable(3,1,0);//éšè—å›¾æ ‡
-			SetControlVisiable(3,2,0);//éšè—åŠ¨ç”»
-			SetButtonValue(3,3,0);//æ˜¾ç¤ºå¼€å§‹è¿è¡Œ
-		}
-	}
+    unsigned char start_value[5] = {0,8,16,24,32};
+	switch (screen_id)
+    {
+        case 2:
+            switch(control_id)
+            {
+                case 1:
+                    if(elevator[current_number].Up_Result == 0)
+                    {
+                        SetTextValue(2,10,"\\");
+                        SetTextValue(2,11,"\\");
+                        SetTextValue(2,12,"\\");
+                    }
+                    else if(elevator[current_number].Up_Result == 2)
+                    {
+                        SetTextValue(2,10,elevator[current_number].Up_Elec_Speed);
+                        SetTextValue(2,11, elevator[current_number].Up_Mach_Speed);
+                        SetTextValue(2,12,"Õı³£");
+                    }
+                    else 
+                    {
+                        SetTextValue(2,10,"\\");
+                        SetTextValue(2,11,"\\");                            
+                        SetTextValue(2,12,"Òì³£");
+                    }                            
+                    break;
+                case 2:
+                    if(elevator[current_number].Down_Result == 0)
+                    {
+                        SetTextValue(2,13,"\\");
+                        SetTextValue(2,14,"\\");
+                        SetTextValue(2,15,"\\");
+       
+                    }
+                    else if(elevator[current_number].Down_Result == 2)
+                    {
+                        SetTextValue(2,13,elevator[current_number].Down_Elec_Speed);
+                        SetTextValue(2,14,elevator[current_number].Down_Mach_Speed);                           
+                        SetTextValue(2,15,"Õı³£");
+                    }
+                    else
+                    {
+                        SetTextValue(2,13,"\\");
+                        SetTextValue(2,14,"\\");
+                        SetTextValue(2,15,"Òì³£");
+                    }                            
+                    break;
+                case 3:
+                    Run_Print();
+                    break;
+            }
+            break;
+        case 4:
+            switch(control_id)
+            {
+                case 4:
+                    Find();
+                    if(find_begin_number != -1)
+                    {
+                        find_cur_begin_number = find_begin_number;
+                        find_cur_end_number = find_cur_begin_number+3;
+                        if(find_cur_end_number > find_end_number)
+                        {
+                            find_cur_end_number = find_end_number;
+                        }
+                        List_Show();
+                    }
+                    break;
+                case 34:
+                    if(find_begin_number != -1)//ËµÃ÷ÕÒµ½ÁË
+                        current_number = find_cur_begin_number;
+                    Show_screen_2();
+                    break;
+                case 35:
+                    if(find_begin_number != -1)
+                    {
+                        if(find_cur_end_number-find_cur_begin_number>=1)
+                            current_number = find_cur_begin_number+1;
+                        else
+                            current_number = find_cur_begin_number;
+                    }
+                    Show_screen_2();
+                    break;
+                case 36:
+                    if(find_begin_number != -1)
+                    {
+                        if(find_cur_end_number-find_cur_begin_number>=2)
+                            current_number = find_cur_begin_number+2;
+                        else if(find_cur_end_number-find_cur_begin_number>=1)
+                            current_number = find_cur_begin_number+1;
+                        else
+                            current_number = find_cur_begin_number;
+                    }
+                    Show_screen_2();
+                    break;
+                case 37:
+                    if(find_begin_number != -1)
+                    {
+                        if(find_cur_end_number-find_cur_begin_number>=3)
+                            current_number = find_cur_begin_number+3;
+                        else if(find_cur_end_number-find_cur_begin_number>=2)
+                            current_number = find_cur_begin_number+2;
+                        else if(find_cur_end_number-find_cur_begin_number>=2)
+                            current_number = find_cur_begin_number+1;
+                        else
+                            current_number = find_cur_begin_number;
+                    }   
+                    Show_screen_2();
+                    break;
+                case 38://ÏÂÀ­
+                    if(find_cur_end_number != find_end_number)
+                    {
+                        find_cur_begin_number++;
+                        find_cur_end_number++;
+                    }
+                    List_Show();
+                    break;
+                case 39://ÉÏÀ­
+                    if(find_cur_begin_number != find_begin_number)
+                    {
+                        find_cur_begin_number--;
+                        find_cur_end_number--;
+                    }
+                    List_Show();
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case 5:
+            switch(control_id)
+            {
+                case 9:
+                    if(state == 1)
+                    {
+                        open_motor(); 
+                        current_show_speed = 0.5;//¿ªÊ¼µç»úÉèÖÃËÙ¶ÈÎª1m/s
+                        motor_open_flag = 1;
+                        if(dir_flag == 0)
+                        {
+                            GraphChannelDataAdd(5,14,0,start_value,5);  
+                        }
+                        else
+                        {
+                            GraphChannelDataAdd(5,15,0,start_value,5);
+                        }
+                    }
+                    else
+                    {
+                        motor_stop();
+                        motor_open_flag = 0;
+                    }
+                    break;
+                case 10:
+                    STMFLASH_Write(PARAM_SAVE_ADDR + &elevator[current_number] - &elevator[0],\
+                                  (uint16_t *)&elevator[current_number],sizeof(elevator[0])/2);
+                    if(head.end_number == 99 && head.begin_number == 0)
+                    {
+                        head.end_number = 0;
+                        head.begin_number = 1;
+                    }
+                    else if(head.end_number < head.begin_number)
+                    {
+                        head.end_number++;
+                        head.begin_number++;
+                        if( head.begin_number == 100) head.begin_number = 0;
+                    }
+                    else
+                    {
+                        head.end_number++;
+                    }
+                    STMFLASH_Write(PARAM_HEAD_ADDR,(uint16_t *)&head,sizeof(head)/2);
+                    break;
+                case 11:
+                    Run_Print();
+                    break;
+                case 12:
+                    motor_rev();
+                    dir_flag = 0;
+                    break;
+                case 13:
+                    motor_fwd();
+                    dir_flag = 1;
+                    break;
+            }           
+            break;
+        default:
+            break;
+        
+    }
 }
 
 /*! 
- *  \brief  æ–‡æœ¬æ§ä»¶é€šçŸ¥
- *  \details  å½“æ–‡æœ¬é€šè¿‡é”®ç›˜æ›´æ–°(æˆ–è°ƒç”¨GetControlValue)æ—¶ï¼Œæ‰§è¡Œæ­¤å‡½æ•°
- *  \param screen_id ç”»é¢ID
- *  \param control_id æ§ä»¶ID
- *  \param str æ–‡æœ¬æ§ä»¶å†…å®¹
+ *  \brief      ÎÄ±¾¿Ø¼şÍ¨Öª
+ *  \details    µ±ÎÄ±¾Í¨¹ı¼üÅÌ¸üĞÂ(»òµ÷ÓÃGetControlValue)Ê±£¬Ö´ĞĞ´Ëº¯Êı
+ *  \param      screen_id »­ÃæID
+ *  \param      control_id ¿Ø¼şID
+ *  \param      str ÎÄ±¾¿Ø¼şÄÚÈİ
  */
 static void NotifyText(uint16 screen_id, uint16 control_id, uint8 *str)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
-	int32 value = 0; 
-
-	if(screen_id==2)//ç”»é¢ID2ï¼šæ–‡æœ¬è®¾ç½®å’Œæ˜¾ç¤º
-	{
-		sscanf((const char *)str,"%ld",&value);//æŠŠå­—ç¬¦ä¸²è½¬æ¢ä¸ºæ•´æ•°
-
-		if(control_id==1)//æœ€é«˜ç”µå‹
-		{
-			//é™å®šæ•°å€¼èŒƒå›´ï¼ˆä¹Ÿå¯ä»¥åœ¨æ–‡æœ¬æ§ä»¶å±æ€§ä¸­è®¾ç½®ï¼‰
-			if(value<0)
-				value = 0;
-			else if(value>380)
-				value = 380;
-
-			SetTextValueInt32(2,1,value);  //æ›´æ–°æœ€é«˜ç”µå‹
-			SetTextValueInt32(2,4,value/2);  //æ›´æ–°æœ€é«˜ç”µå‹/2
-		}
-	}
+    unsigned int len = strlen((const char *)str);
+	switch (screen_id)
+    {
+        case 1:
+            switch(control_id)
+            {
+                case 1:
+                    memcpy(elevator[current_number].Register_Code,(const char *)str,len);
+                    elevator[current_number].Register_Code[len] = '\0';
+                    break;
+                case 2:
+                    memcpy(elevator[current_number].Factory_Numbe,(const char *)str,len);
+                    elevator[current_number].Factory_Numbe[len] = '\0';
+                    break;
+                case 3:
+                    memcpy(elevator[current_number].Spec_Mode,(const char *)str,len);
+                    elevator[current_number].Spec_Mode[len] = '\0';
+                    break;
+                case 5:
+                    memcpy(elevator[current_number].Rated_Speed,(const char *)str,len);
+                    elevator[current_number].Rated_Speed[len] = '\0';
+                break;
+                default:
+                    break;
+            }
+            break;
+        case 4:
+            switch(control_id)
+            {
+                case 1:
+                    memcpy(Match_Register_Code,(const char *)str,len);
+                    Match_Register_Code[len] = '\0';
+                    Find_flag = 0;
+                    break;
+                case 2:
+                    memcpy(Match_Factory_Numbe,(const char *)str,len);
+                    Match_Factory_Numbe[len] = '\0';
+                    Find_flag = 1;
+                    break;
+                case 3:
+                    memcpy(Match_Date,(const char *)str,len);
+                    Match_Date[len] = '\0';
+                    Find_flag = 2;
+                    break;
+                default:
+                    break;
+                  
+            }
+            break;
+        default:
+            break;
+        
+    }
 }
 
 /*! 
- *  \brief  è¿›åº¦æ¡æ§ä»¶é€šçŸ¥
- *  \details  è°ƒç”¨GetControlValueæ—¶ï¼Œæ‰§è¡Œæ­¤å‡½æ•°
- *  \param screen_id ç”»é¢ID
- *  \param control_id æ§ä»¶ID
- *  \param value å€¼
+ *  \brief      ½ø¶ÈÌõ¿Ø¼şÍ¨Öª
+ *  \details    µ÷ÓÃGetControlValueÊ±£¬Ö´ĞĞ´Ëº¯Êı
+ *  \param      screen_id »­ÃæID
+ *  \param      control_id ¿Ø¼şID
+ *  \param      value Öµ
  */
 static void NotifyProgress(uint16 screen_id, uint16 control_id, uint32 value)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
+
 }
 
 /*! 
- *  \brief  æ»‘åŠ¨æ¡æ§ä»¶é€šçŸ¥
- *  \details  å½“æ»‘åŠ¨æ¡æ”¹å˜(æˆ–è°ƒç”¨GetControlValue)æ—¶ï¼Œæ‰§è¡Œæ­¤å‡½æ•°
- *  \param screen_id ç”»é¢ID
- *  \param control_id æ§ä»¶ID
- *  \param value å€¼
+ *  \brief      »¬¶¯Ìõ¿Ø¼şÍ¨Öª
+ *  \details    µ±»¬¶¯Ìõ¸Ä±ä(»òµ÷ÓÃGetControlValue)Ê±£¬Ö´ĞĞ´Ëº¯Êı
+ *  \param      screen_id »­ÃæID
+ *  \param      control_id ¿Ø¼şID
+ *  \param      value Öµ
  */
 static void NotifySlider(uint16 screen_id, uint16 control_id, uint32 value)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
-	if(screen_id==5&&control_id==2)//æ»‘å—æ§åˆ¶
-	{
-		test_value = value;
 
-		SetProgressValue(5,1,test_value); //æ›´æ–°è¿›åº¦æ¡æ•°å€¼
-	}
 }
 
 /*! 
- *  \brief  ä»ªè¡¨æ§ä»¶é€šçŸ¥
- *  \details  è°ƒç”¨GetControlValueæ—¶ï¼Œæ‰§è¡Œæ­¤å‡½æ•°
- *  \param screen_id ç”»é¢ID
- *  \param control_id æ§ä»¶ID
- *  \param value å€¼
+ *  \brief      ÒÇ±í¿Ø¼şÍ¨Öª
+ *  \details    µ÷ÓÃGetControlValueÊ±£¬Ö´ĞĞ´Ëº¯Êı
+ *  \param      screen_id »­ÃæID
+ *  \param      control_id ¿Ø¼şID
+ *  \param      value Öµ
  */
 static void NotifyMeter(uint16 screen_id, uint16 control_id, uint32 value)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
+	
 }
 
+
+ 
 /*! 
- *  \brief  èœå•æ§ä»¶é€šçŸ¥
- *  \details  å½“èœå•é¡¹æŒ‰ä¸‹æˆ–æ¾å¼€æ—¶ï¼Œæ‰§è¡Œæ­¤å‡½æ•°
- *  \param screen_id ç”»é¢ID
- *  \param control_id æ§ä»¶ID
- *  \param item èœå•é¡¹ç´¢å¼•
- *  \param state æŒ‰é’®çŠ¶æ€ï¼š0æ¾å¼€ï¼Œ1æŒ‰ä¸‹
+ *  \brief      ²Ëµ¥¿Ø¼şÍ¨Öª
+ *  \details    µ±²Ëµ¥Ïî°´ÏÂ»òËÉ¿ªÊ±£¬Ö´ĞĞ´Ëº¯Êı
+ *  \param      screen_id »­ÃæID
+ *  \param      control_id ¿Ø¼şID
+ *  \param      item ²Ëµ¥ÏîË÷Òı
+ *  \param      state °´Å¥×´Ì¬£º0ËÉ¿ª£¬1°´ÏÂ
  */
 static void NotifyMenu(uint16 screen_id, uint16 control_id, uint8  item, uint8  state)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
+    if(screen_id == 1)
+    {
+        if(control_id == 9)elevator[current_number].Dir = item;
+    }
+    
 }
 
 /*! 
- *  \brief  é€‰æ‹©æ§ä»¶é€šçŸ¥
- *  \details  å½“é€‰æ‹©æ§ä»¶å˜åŒ–æ—¶ï¼Œæ‰§è¡Œæ­¤å‡½æ•°
- *  \param screen_id ç”»é¢ID
- *  \param control_id æ§ä»¶ID
- *  \param item å½“å‰é€‰é¡¹
+ *  \brief      Ñ¡Ôñ¿Ø¼şÍ¨Öª
+ *  \details    µ±Ñ¡Ôñ¿Ø¼ş±ä»¯Ê±£¬Ö´ĞĞ´Ëº¯Êı
+ *  \param      screen_id »­ÃæID
+ *  \param      control_id ¿Ø¼şID
+ *  \param      item µ±Ç°Ñ¡Ïî
  */
 static void NotifySelector(uint16 screen_id, uint16 control_id, uint8  item)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
+       
 }
 
 /*! 
- *  \brief  å®šæ—¶å™¨è¶…æ—¶é€šçŸ¥å¤„ç†
- *  \param screen_id ç”»é¢ID
- *  \param control_id æ§ä»¶ID
+ *  \brief  ¶¨Ê±Æ÷³¬Ê±Í¨Öª´¦Àí
+ *  \param  screen_id »­ÃæID
+ *  \param  control_id ¿Ø¼şID
  */
 static void NotifyTimer(uint16 screen_id, uint16 control_id)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
+	
 }
 
 /*! 
- *  \brief  è¯»å–ç”¨æˆ·FLASHçŠ¶æ€è¿”å›
- *  \param status 0å¤±è´¥ï¼Œ1æˆåŠŸ
- *  \param _data è¿”å›æ•°æ®
- *  \param length æ•°æ®é•¿åº¦
+ *  \brief  ¶ÁÈ¡ÓÃ»§FLASH×´Ì¬·µ»Ø
+ *  \param  status 0Ê§°Ü£¬1³É¹¦
+ *  \param  _data ·µ»ØÊı¾İ
+ *  \param  length Êı¾İ³¤¶È
  */
 static void NotifyReadFlash(uint8 status,uint8 *_data,uint16 length)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
+	
 }
 
 /*! 
- *  \brief  å†™ç”¨æˆ·FLASHçŠ¶æ€è¿”å›
- *  \param status 0å¤±è´¥ï¼Œ1æˆåŠŸ
+ *  \brief  Ğ´ÓÃ»§FLASH×´Ì¬·µ»Ø
+ *  \param  status 0Ê§°Ü£¬1³É¹¦
  */
 static void NotifyWriteFlash(uint8 status)
 {
-	//TODO: æ·»åŠ ç”¨æˆ·ä»£ç 
+	
 }
 
+
 /*! 
- *  \brief  è¯»å–RTCæ—¶é—´ï¼Œæ³¨æ„è¿”å›çš„æ˜¯BCDç 
- *  \param year å¹´ï¼ˆBCDï¼‰
- *  \param month æœˆï¼ˆBCDï¼‰
- *  \param week æ˜ŸæœŸï¼ˆBCDï¼‰
- *  \param day æ—¥ï¼ˆBCDï¼‰
- *  \param hour æ—¶ï¼ˆBCDï¼‰
- *  \param minute åˆ†ï¼ˆBCDï¼‰
- *  \param second ç§’ï¼ˆBCDï¼‰
+ *  \brief  ¶ÁÈ¡RTCÊ±¼ä£¬×¢Òâ·µ»ØµÄÊÇBCDÂë
+ *  \param  year Äê£¨BCD£©
+ *  \param  month ÔÂ£¨BCD£©
+ *  \param  week£¨BCD£©
+ *  \param  day ÈÕ£¨BCD£©
+ *  \param  hour Ê±£¨BCD£©
+ *  \param  minute ·Ö£¨BCD£©
+ *  \param  second Ãë£¨BCD£©
  */
-static void NotifyReadRTC(uint8 year,uint8 month,uint8 week,uint8 day,uint8 hour,uint8 minute,uint8 second)
-{
 
+static void NotifyReadRTC(DateT *Date)
+{
+    elevator[current_number].Date.year = Date->year/16*10+Date->year%16;
+    elevator[current_number].Date.month = Date->month/16*10+Date->month%16;
+    elevator[current_number].Date.day  = Date->day/16*10+Date->day%16;
+    elevator[current_number].Date.hour = Date->hour/16*10+Date->hour%16;
+    elevator[current_number].Date.minute = Date->minute/16*10+Date->minute%16;
+    elevator[current_number].Date.second = Date->second/16*10+Date->second%16;
+    elevator[current_number].Date.week = Date->week/16*10+Date->week%16;
 }
 
 
+
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+
 /*! 
- *  \brief  æ¶ˆæ¯å¤„ç†æµç¨‹
- *  \param msg å¾…å¤„ç†æ¶ˆæ¯
- *  \param size æ¶ˆæ¯é•¿åº¦
+ *  \brief  ÏûÏ¢´¦ÀíÁ÷³Ì
+ *  \param  msg ´ı´¦ÀíÏûÏ¢
+ *  \param  size ÏûÏ¢³¤¶È
  */
 static void ProcessMessage( PCTRL_MSG msg, uint16 size )
 {
-	uint8 cmd_type = msg->cmd_type;					//æŒ‡ä»¤ç±»å‹
-	uint8 ctrl_msg = msg->ctrl_msg;   				//æ¶ˆæ¯çš„ç±»å‹
-	uint8 control_type = msg->control_type;			//æ§ä»¶ç±»å‹
-	uint16 screen_id = PTR2U16(&msg->screen_id);	//ç”»é¢ID
-	uint16 control_id = PTR2U16(&msg->control_id);	//æ§ä»¶ID
-	uint32 value = PTR2U32(msg->param);				//æ•°å€¼
-
+	uint8 cmd_type = msg->cmd_type;					//Ö¸ÁîÀàĞÍ
+	uint8 ctrl_msg = msg->ctrl_msg;   				//ÏûÏ¢µÄÀàĞÍ
+	uint8 control_type = msg->control_type;			//¿Ø¼şÀàĞÍ
+	uint16 screen_id = PTR2U16(&msg->screen_id);	//»­ÃæID
+	uint16 control_id = PTR2U16(&msg->control_id);	//¿Ø¼şID
+	uint32 value = PTR2U32(msg->param);				//ÊıÖµ
     
 	switch(cmd_type)
 	{		
-		case NOTIFY_TOUCH_PRESS:					//è§¦æ‘¸å±æŒ‰ä¸‹
-		case NOTIFY_TOUCH_RELEASE:					//è§¦æ‘¸å±æ¾å¼€
-			NotifyTouchXY(cmd_buffer[1],PTR2U16(cmd_buffer+2),PTR2U16(cmd_buffer+4));
+		case NOTIFY_TOUCH_PRESS:					//´¥ÃşÆÁ°´ÏÂ
+		case NOTIFY_TOUCH_RELEASE:					//´¥ÃşÆÁËÉ¿ª
+			NotifyTouchXY(hmi_dev.cmd_buffer[1],PTR2U16(hmi_dev.cmd_buffer+2),\
+                          PTR2U16(hmi_dev.cmd_buffer+4));
 			break;	
-		case NOTIFY_WRITE_FLASH_OK:					//å†™FLASHæˆåŠŸ
+		case NOTIFY_WRITE_FLASH_OK:					//Ğ´FLASH³É¹¦
 			NotifyWriteFlash(1);
 			break;
-		case NOTIFY_WRITE_FLASH_FAILD:				//å†™FLASHå¤±è´¥
+		case NOTIFY_WRITE_FLASH_FAILD:				//Ğ´FLASHÊ§°Ü
 			NotifyWriteFlash(0);
 			break;
-		case NOTIFY_READ_FLASH_OK:					//è¯»å–FLASHæˆåŠŸ
-			NotifyReadFlash(1,cmd_buffer+2,size-6);	//å»é™¤å¸§å¤´å¸§å°¾
+		case NOTIFY_READ_FLASH_OK:					//¶ÁÈ¡FLASH³É¹¦
+			NotifyReadFlash(1,hmi_dev.cmd_buffer+2,size-6);
 			break;
-		case NOTIFY_READ_FLASH_FAILD:				//è¯»å–FLASHå¤±è´¥
+		case NOTIFY_READ_FLASH_FAILD:				//¶ÁÈ¡FLASHÊ§°Ü
 			NotifyReadFlash(0,0,0);
 			break;
-		case NOTIFY_READ_RTC:						//è¯»å–RTCæ—¶é—´
-			NotifyReadRTC(cmd_buffer[1],cmd_buffer[2],cmd_buffer[3],cmd_buffer[4],cmd_buffer[5],cmd_buffer[6],cmd_buffer[7]);
+		case NOTIFY_READ_RTC:						//¶ÁÈ¡RTCÊ±¼ä
+			NotifyReadRTC((DateT *)&hmi_dev.cmd_buffer[2]);
 			break;
 		case NOTIFY_CONTROL:
 		{
-			if(ctrl_msg==MSG_GET_CURRENT_SCREEN)	//ç”»é¢IDå˜åŒ–é€šçŸ¥
+			if(ctrl_msg==MSG_GET_CURRENT_SCREEN)	//»­ÃæID±ä»¯Í¨Öª
 			{
 				NotifyScreen(screen_id);
 			}
@@ -325,28 +847,28 @@ static void ProcessMessage( PCTRL_MSG msg, uint16 size )
 			{
 				switch(control_type)
 				{
-					case kCtrlButton: 				//æŒ‰é’®æ§ä»¶
+					case kCtrlButton: 				//°´Å¥¿Ø¼ş
 						NotifyButton(screen_id,control_id,msg->param[1]);
 						break;
-					case kCtrlText:					//æ–‡æœ¬æ§ä»¶
+					case kCtrlText:					//ÎÄ±¾¿Ø¼ş
 						NotifyText(screen_id,control_id,msg->param);
 						break;
-					case kCtrlProgress: 			//è¿›åº¦æ¡æ§ä»¶
+					case kCtrlProgress: 			//½ø¶ÈÌõ¿Ø¼ş
 						NotifyProgress(screen_id,control_id,value);
 						break;
-					case kCtrlSlider: 				//æ»‘åŠ¨æ¡æ§ä»¶
+					case kCtrlSlider: 				//»¬¶¯Ìõ¿Ø¼ş
 						NotifySlider(screen_id,control_id,value);
 						break;
-					case kCtrlMeter: 				//ä»ªè¡¨æ§ä»¶
+					case kCtrlMeter: 				//ÒÇ±í¿Ø¼ş
 						NotifyMeter(screen_id,control_id,value);
 						break;
-					case kCtrlMenu:					//èœå•æ§ä»¶
+					case kCtrlMenu:					//²Ëµ¥¿Ø¼ş
 						NotifyMenu(screen_id,control_id,msg->param[0],msg->param[1]);
 						break;
-					case kCtrlSelector:				//é€‰æ‹©æ§ä»¶
+					case kCtrlSelector:				//Ñ¡Ôñ¿Ø¼ş
 						NotifySelector(screen_id,control_id,msg->param[0]);
 						break;
-					case kCtrlRTC:					//å€’è®¡æ—¶æ§ä»¶
+					case kCtrlRTC:					//µ¹¼ÆÊ±¿Ø¼ş
 						NotifyTimer(screen_id,control_id);
 						break;
 					default:
@@ -355,58 +877,55 @@ static void ProcessMessage( PCTRL_MSG msg, uint16 size )
 			}	
 			break;		
 		}	
-
 		default:
 		{
 			break;
 		}
+        
 	}
-}
-static void Hmi_var_init()
-{
-    uint16 i=0;
     
-    for(i=0;i<CMD_MAX_SIZE;i++)
-    {
-        cmd_buffer[i] = 0;
-    }
-    current_screen_id = 0;
-    test_value = 0;               
-    update_en = 0;
 }
+
 
 
 void Hmi_init(void)
 {
-    Hmi_var_init();
+    uint16 i=0;
+    Elevator_HeadT head_temp;
+    for(i=0;i<CMD_MAX_SIZE;i++)
+    {
+        hmi_dev.cmd_buffer[i] = 0;
+    }
+    hmi_dev.current_screen_id = 0;
     queue_reset();
+    hmi_driver_init(UpdateUI);//½«Êµ¼Ê¸üĞÂº¯ÊıºÍÇı¶¯°ó¶¨£¬Í¨¹ıµ×²ã¶¨Ê±Æ÷¼ä¸ôĞÔµÄµ÷ÓÃ
     
-    hmi_driver_init();
+    STMFLASH_Read(PARAM_HEAD_ADDR,(uint16_t *)&head_temp,sizeof(head_temp)/2);
+    if(head_temp.deedbeef == 0x12345678)
+    {
+       head.begin_number = head_temp.begin_number;
+       head.end_number = head_temp.end_number; 
+       if(head.end_number > head.begin_number)
+       {
+           STMFLASH_Read(PARAM_SAVE_ADDR,(uint16_t *)elevator,sizeof(elevator[0])*head.end_number/2);
+       }
+       else
+       {
+           STMFLASH_Read(PARAM_SAVE_ADDR,(uint16_t *)elevator,sizeof(elevator[0])*50);
+       }
+    }
+    current_number = head.end_number;
 }
+    
 
 void Hmi_App_Run(void)
 {
 	qsize  size = 0;
-	//uint32 timer_tick_last_update = 0; //ä¸Šä¸€æ¬¡æ›´æ–°çš„æ—¶é—´
-
-	size = queue_find_cmd(cmd_buffer,CMD_MAX_SIZE); //ä»ç¼“å†²åŒºä¸­è·å–ä¸€æ¡æŒ‡ä»¤        
-	if(size>0)//æ¥æ”¶åˆ°æŒ‡ä»¤
-	{
-		ProcessMessage((PCTRL_MSG)cmd_buffer, size);//æŒ‡ä»¤å¤„ç†
-	}
     
-    /****************************************************************************************************************
-        ç‰¹åˆ«æ³¨æ„
-        MCUä¸è¦é¢‘ç¹å‘ä¸²å£å±å‘é€æ•°æ®ï¼Œå¦åˆ™ä¸²å£å±çš„å†…éƒ¨ç¼“å­˜åŒºä¼šæ»¡ï¼Œä»è€Œå¯¼è‡´æ•°æ®ä¸¢å¤±(ç¼“å†²åŒºå¤§å°ï¼šæ ‡å‡†å‹8Kï¼ŒåŸºæœ¬å‹4.7K)
-        1) ä¸€èˆ¬æƒ…å†µä¸‹ï¼Œæ§åˆ¶MCUå‘ä¸²å£å±å‘é€æ•°æ®çš„å‘¨æœŸå¤§äº100msï¼Œå°±å¯ä»¥é¿å…æ•°æ®ä¸¢å¤±çš„é—®é¢˜ï¼›
-        2) å¦‚æœä»ç„¶æœ‰æ•°æ®ä¸¢å¤±çš„é—®é¢˜ï¼Œè¯·åˆ¤æ–­ä¸²å£å±çš„BUSYå¼•è„šï¼Œä¸ºé«˜æ—¶ä¸èƒ½å‘é€æ•°æ®ç»™ä¸²å£å±ã€‚
-    ******************************************************************************************************************/
-    
-	if(update_en == 100000)
+	size = queue_find_cmd(hmi_dev.cmd_buffer,CMD_MAX_SIZE); //´Ó»º³åÇøÖĞ»ñÈ¡Ò»ÌõÖ¸Áî        
+	if(size>0)//½ÓÊÕµ½Ö¸Áî
 	{
-		update_en = 0;
-		UpdateUI(); 
+		ProcessMessage((PCTRL_MSG)hmi_dev.cmd_buffer, size);//Ö¸Áî´¦Àí
 	}
-    update_en++;
+ 
 }
-

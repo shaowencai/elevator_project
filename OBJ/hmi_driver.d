@@ -32,4 +32,5 @@
 ..\obj\hmi_driver.o: ..\STM32F10x_FWLib\inc\stm32f10x_wwdg.h
 ..\obj\hmi_driver.o: ..\STM32F10x_FWLib\inc\misc.h
 ..\obj\hmi_driver.o: ..\driver\Pin.h
+..\obj\hmi_driver.o: ..\driver\timer.h
 ..\obj\hmi_driver.o: ..\HMI\cmd_queue.h

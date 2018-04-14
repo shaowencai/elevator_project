@@ -7,7 +7,7 @@ typedef struct
 {
     TIM_TypeDef     *TIMx;
     IRQn_Type       TIMx_IRQn;
-    
+    uint16_t        TIM_Period;
 }TimerT;
 
 

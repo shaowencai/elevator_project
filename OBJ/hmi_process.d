@@ -33,5 +33,12 @@
 ..\obj\hmi_process.o: ..\STM32F10x_FWLib\inc\stm32f10x_wwdg.h
 ..\obj\hmi_process.o: ..\STM32F10x_FWLib\inc\misc.h
 ..\obj\hmi_process.o: ..\driver\Pin.h
+..\obj\hmi_process.o: ..\driver\timer.h
 ..\obj\hmi_process.o: ..\HMI\cmd_queue.h
 ..\obj\hmi_process.o: D:\MDK\ARM\ARMCC\bin\..\include\stdio.h
+..\obj\hmi_process.o: D:\MDK\ARM\ARMCC\bin\..\include\string.h
+..\obj\hmi_process.o: ..\driver\delay.h
+..\obj\hmi_process.o: ..\APP\motor.h
+..\obj\hmi_process.o: ..\driver\hard_pwm.h
+..\obj\hmi_process.o: ..\APP\printer.h
+..\obj\hmi_process.o: ..\driver\stmflash.h

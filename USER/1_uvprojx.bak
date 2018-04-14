@@ -346,7 +346,7 @@
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
-            <Optim>4</Optim>
+            <Optim>1</Optim>
             <oTime>0</oTime>
             <SplitLS>0</SplitLS>
             <OneElfS>0</OneElfS>
@@ -448,14 +448,14 @@
               <FilePath>..\HMI\hmi_driver.c</FilePath>
             </File>
             <File>
-              <FileName>cmd_process.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\HMI\cmd_process.c</FilePath>
-            </File>
-            <File>
               <FileName>cmd_queue.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\HMI\cmd_queue.c</FilePath>
+            </File>
+            <File>
+              <FileName>hmi_process.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\HMI\hmi_process.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -566,6 +566,16 @@
               <FileName>stm32f10x_flash.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_FWLib\src\stm32f10x_flash.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>ReadMe</GroupName>
+          <Files>
+            <File>
+              <FileName>说明.txt</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\说明.txt</FilePath>
             </File>
           </Files>
         </Group>

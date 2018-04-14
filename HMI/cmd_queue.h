@@ -5,9 +5,6 @@ typedef unsigned char qdata;
 typedef unsigned short qsize;
 
 
-#define CMD_HEAD 0XEE  //帧头
-#define CMD_TAIL 0XFFFCFFFF //帧尾
-
 typedef struct _QUEUE
 {
 	qsize _head; //队列头

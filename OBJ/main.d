@@ -1,5 +1,4 @@
 ..\obj\main.o: main.c
-..\obj\main.o: D:\MDK\ARM\ARMCC\bin\..\include\stdio.h
 ..\obj\main.o: ..\driver\delay.h
 ..\obj\main.o: ..\USER\stm32f10x.h
 ..\obj\main.o: ..\CORE\core_cm3.h
@@ -40,3 +39,5 @@
 ..\obj\main.o: ..\HMI\hmi_config.h
 ..\obj\main.o: ..\HMI\hmi_driver.h
 ..\obj\main.o: ..\HMI\cmd_queue.h
+..\obj\main.o: D:\MDK\ARM\ARMCC\bin\..\include\stdio.h
+..\obj\main.o: ..\driver\stmflash.h
