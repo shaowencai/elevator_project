@@ -1,5 +1,6 @@
 #include "hmi_process.h"
 #include <string.h>
+#include <stdlib.h>
 #include "delay.h"
 #include "motor.h"
 #include "printer.h"
@@ -35,13 +36,13 @@ typedef struct
     char Factory_Numbe[10]; //出厂编号
     DateT Date;
     char Spec_Mode[15];     //规格型号
-    char Dir;               //单双方向 0单向 1双向
-    char Rated_Speed[4];    //额定速度
-    char Up_Elec_Speed[4];  //上行电气速度       
-    char Up_Mach_Speed[4];  //上行机械速度       
+    char Dir;               //单双方向 0单向 1双向 //用户没有指定默认为单向
+    char Rated_Speed[8];    //额定速度
+    char Up_Elec_Speed[8];  //上行电气速度       
+    char Up_Mach_Speed[8];  //上行机械速度       
     char Up_Result;         //上行结果 1异常 2正常 0无效
-    char Down_Elec_Speed[4];//下行电气速度      
-    char Down_Mach_Speed[4];//下行机械速度       
+    char Down_Elec_Speed[8];//下行电气速度      
+    char Down_Mach_Speed[8];//下行机械速度       
     char Down_Result;       //下行结果 1异常 2正常 0无效
 }Elevator_ParamT;
 #pragma pack(pop)
@@ -56,10 +57,11 @@ typedef struct
 
 
 Elevator_ParamT elevator[100] = {0};
+Elevator_ParamT elevator_tmp[100] = {0};
 Elevator_HeadT  head= {0x12345678,0,0};   
 unsigned int  current_number;
 unsigned char dir_flag=0;
-unsigned char Find_flag=0;//0 按注册代码查询  1按出厂编号查询  2按测试时间查询
+int Find_flag=-1;//0 按注册代码查询  1按出厂编号查询  2按测试时间查询
 char Match_Register_Code[20];
 char Match_Factory_Numbe[10];
 char Match_Date[15];
@@ -67,8 +69,15 @@ int  find_begin_number = -1;
 int  find_cur_begin_number = -1;
 int  find_cur_end_number = -1;
 int  find_end_number = -1;
-float current_show_speed = 0.5;
+float Rated_Speed;
+float Max_Speed;
+float Min_Speed;
+float UpElec_Speed;
+float DownElec_Speed;
+unsigned int old_Speed;
 unsigned char motor_open_flag =0; //0关闭 1打开
+unsigned int start_duty;
+
 
 void Run_Print(void)
 {
@@ -97,12 +106,21 @@ void Run_Print(void)
     }
     else if(elevator[current_number].Up_Result == 1)
     {
-        SendStringToPrint("     \\          \\      异常\r\n");
+        elevator[current_number].Up_Elec_Speed[4] = 0;
+        elevator[current_number].Up_Mach_Speed[4] = 0;
+        sprintf(buf,"  %4s(m/s) ",elevator[current_number].Up_Elec_Speed);
+        SendStringToPrint(buf);
+        sprintf(buf," %4s(m/s)  ",elevator[current_number].Up_Mach_Speed);
+        SendStringToPrint(buf);
+        SendStringToPrint("异常\r\n");
     }
     else if(elevator[current_number].Up_Result == 2)
     {
-        sprintf(buf," %s(m/s) %s(m/s)  ",elevator[current_number].Up_Elec_Speed,\
-                                             elevator[current_number].Up_Mach_Speed);
+        elevator[current_number].Up_Elec_Speed[4] = 0;
+        elevator[current_number].Up_Mach_Speed[4] = 0;
+        sprintf(buf,"  %4s(m/s) ",elevator[current_number].Up_Elec_Speed);
+        SendStringToPrint(buf);
+        sprintf(buf," %4s(m/s)  ",elevator[current_number].Up_Mach_Speed);
         SendStringToPrint(buf);
         SendStringToPrint("正常\r\n");
     }
@@ -113,12 +131,21 @@ void Run_Print(void)
     }
     else if(elevator[current_number].Down_Result == 1)
     {
-        SendStringToPrint("     \\          \\      异常\r\n");
+        elevator[current_number].Down_Elec_Speed[4] = 0;
+        elevator[current_number].Down_Mach_Speed[4] = 0;
+        sprintf(buf,"  %4s(m/s) ",elevator[current_number].Down_Elec_Speed);
+        SendStringToPrint(buf);
+        sprintf(buf," %4s(m/s)  ",elevator[current_number].Down_Mach_Speed);
+        SendStringToPrint(buf);
+        SendStringToPrint("异常\r\n");
     }
     else if(elevator[current_number].Down_Result == 2)
     {
-        sprintf(buf," %s(m/s) %s(m/s)  ",elevator[current_number].Down_Elec_Speed,\
-                                                     elevator[current_number].Down_Mach_Speed);
+        elevator[current_number].Down_Elec_Speed[4] = 0;
+        elevator[current_number].Down_Mach_Speed[4] = 0;
+        sprintf(buf,"  %4s(m/s) ",elevator[current_number].Down_Elec_Speed);
+        SendStringToPrint(buf);
+        sprintf(buf," %4s(m/s)  ",elevator[current_number].Down_Mach_Speed);
         SendStringToPrint(buf);
         SendStringToPrint("正常\r\n");
     }
@@ -159,6 +186,14 @@ static void NotifyScreen(uint16 screen_id)
         for(i=6; i<=33; i++) SetTextValue(4,i,"\0");
         GraphChannelDataClear(5,14,0);
         GraphChannelDataClear(5,15,0);
+        Match_Register_Code[0] = '\0';
+        Match_Factory_Numbe[0] = '\0';
+        Match_Date[0] = '\0';
+        Find_flag = -1;
+        find_begin_number = -1;
+        find_cur_begin_number = -1;
+        find_cur_end_number = -1;
+        find_end_number = -1;
         current_number = head.end_number;
     }
 }
@@ -190,48 +225,78 @@ static void SetTextValueFloat(uint16 screen_id, uint16 control_id,float value)
 }
 #endif
 
+int display_delay = 0;
 static void UpdateUI(void) 
 {
     unsigned char value;
     char buf[10];
     float temp_speed;//临时速度变量
-    
+    unsigned int  i_temp_speed;
     switch (hmi_dev.current_screen_id)
     {
         case 5:
             if(motor_open_flag == 1)
             {
+                temp_speed = Get_motor_speed();
+                i_temp_speed = temp_speed*100;
+                if(i_temp_speed == old_Speed ||i_temp_speed == old_Speed-1 || i_temp_speed== old_Speed+1)
+                {
+                    if(start_duty < 10000)start_duty = start_duty + 100;
+                }
+                old_Speed = i_temp_speed;
+                display_delay ++;
+                if(display_delay != 2)break;
+                display_delay = 0;
                 if(dir_flag == 0)
                 {
-                    Set_Motor_Speed(current_show_speed);
-                    value = current_show_speed*80;
-                    GraphChannelDataAdd(5,14,0,&value,1);
-                    sprintf(buf,"%3.2fm/s",current_show_speed);
+                    set_motor_rev_speed(start_duty);
+                    temp_speed = Get_motor_speed();
+                    sprintf(buf,"%3.2fm/s",temp_speed);
                     SetTextValue(5,1,buf);
-                    if(current_show_speed < 1.7)
+                    value = (unsigned char)(temp_speed * 100);
+                    GraphChannelDataAdd(5,14,0,&value,1);
+
+                    if(temp_speed < Max_Speed * 1.5)
                     {
                         temp_speed  = Get_Elec_Speed();
                         
-                        if(temp_speed > 0.0001)
+                        if(temp_speed > 0.0001) //如果大于 说明返回不是0
                         {
+                            UpElec_Speed = temp_speed;
                             sprintf(elevator[current_number].Up_Elec_Speed,"%3.2fm/s",temp_speed);
                             SetTextValue(5,2,elevator[current_number].Up_Elec_Speed);
                         }
+                        
+                        
                         temp_speed  = Get_Mach_Speed();
                         
                         if(temp_speed > 0.0001)
                         {
+                            
                             sprintf(elevator[current_number].Up_Mach_Speed,"%3.2fm/s",temp_speed);
                             SetTextValue(5,3,elevator[current_number].Up_Mach_Speed);
-                            elevator[current_number].Up_Result = 2;
-                            SetTextValue(5,4,"正常");
+                            if(temp_speed > UpElec_Speed || UpElec_Speed <Min_Speed || UpElec_Speed >Max_Speed ||temp_speed<Min_Speed ||temp_speed>Max_Speed)
+                            {
+                                elevator[current_number].Up_Result = 1;
+                                SetTextValue(5,4,"异常");
+                            }
+                            else
+                            {
+                                elevator[current_number].Up_Result = 2;
+                                SetTextValue(5,4,"正常");
+                            }
+                            close_motor();
                             motor_open_flag = 0;
+                            value = 0;
+                            GraphChannelDataAdd(5,14,0,&value,1);
                         }
                         
                     }
                     else
                     {
-                        motor_stop();
+                        value = 0;
+                        GraphChannelDataAdd(5,14,0,&value,1);
+                        close_motor();
                         SetTextValue(5,2,"\\");
                         SetTextValue(5,3,"\\");
                         elevator[current_number].Up_Result = 1;
@@ -242,17 +307,20 @@ static void UpdateUI(void)
                 }
                 else
                 {
-                    Set_Motor_Speed(current_show_speed);
-                    value = current_show_speed*80;
-                    GraphChannelDataAdd(5,15,0,&value,1);
-                    sprintf(buf,"%3.2fm/s",current_show_speed);
+                    set_motor_fwd_speed(start_duty);
+                    temp_speed = Get_motor_speed();
+                    sprintf(buf,"%3.2fm/s",temp_speed);
                     SetTextValue(5,5,buf);
-                    if(current_show_speed < 1.7)
+                    value = (unsigned char)(temp_speed * 100);
+                    GraphChannelDataAdd(5,15,0,&value,1);
+                    
+                    if(temp_speed < Max_Speed * 1.5)
                     {
                         temp_speed  = Get_Elec_Speed();
                         
                         if(temp_speed > 0.0001)
                         {
+                            DownElec_Speed = temp_speed;
                             sprintf(elevator[current_number].Down_Elec_Speed,"%3.2fm/s",temp_speed);
                             SetTextValue(5,6,elevator[current_number].Down_Elec_Speed);
                         }
@@ -262,15 +330,28 @@ static void UpdateUI(void)
                         {
                             sprintf(elevator[current_number].Down_Mach_Speed,"%3.2fm/s",temp_speed);
                             SetTextValue(5,7,elevator[current_number].Down_Mach_Speed);
-                            elevator[current_number].Down_Result = 2;
-                            SetTextValue(5,8,"正常");
+                            if(temp_speed > DownElec_Speed || DownElec_Speed <Min_Speed || DownElec_Speed >Max_Speed ||temp_speed<Min_Speed ||temp_speed>Max_Speed)
+                            {
+                                elevator[current_number].Down_Result = 1;
+                                SetTextValue(5,8,"异常");
+                            }
+                            else
+                            {
+                                elevator[current_number].Down_Result = 2;
+                                SetTextValue(5,8,"正常");
+                            }
+                            value = 0;
+                            GraphChannelDataAdd(5,15,0,&value,1);
+                            close_motor();
                             motor_open_flag = 0;
                         }
                         
                     }
                     else
                     {
-                        motor_stop();
+                        value = 0;
+                        GraphChannelDataAdd(5,15,0,&value,1);
+                        close_motor();
                         SetTextValue(5,6,"\\");
                         SetTextValue(5,7,"\\");
                         elevator[current_number].Down_Result = 1;
@@ -278,7 +359,7 @@ static void UpdateUI(void)
                         motor_open_flag = 0;
                     }
                 }
-                current_show_speed = current_show_speed+0.02;
+                
             }
             break;
         default:
@@ -366,9 +447,22 @@ void Find(void)
         }
         if(i == 100) find_end_number = 99;//一直匹配 则结束为最后一个
     }
+    else if(Find_flag == -1) //空查 显示所有
+    {
+        if(head.end_number > head.begin_number)
+        {
+            find_end_number = head.end_number-1;
+            find_begin_number = head.begin_number;
+        }
+        else if(head.begin_number - head.end_number == 1)
+        {
+            find_end_number = 99;
+            find_begin_number = 0;            
+        }
+    }
 
 }
-void List_Show(void)
+void List_Show(void)//上下查询动态更新
 {
     unsigned char i;
     char buf[15];
@@ -381,14 +475,27 @@ void List_Show(void)
         SetTextValue(4,8+i*7,elevator[find_cur_begin_number+i].Factory_Numbe);
         SetTextValue(4,9+i*7,elevator[find_cur_begin_number+i].Spec_Mode);
         if(elevator[find_cur_begin_number+i].Dir == 0)
+        {
             SetTextValue(4,10+i*7,"单向");
+        }
         else if(elevator[find_cur_begin_number+i].Dir == 1)
+        {
             SetTextValue(4,10+i*7,"双向");
+        }
         SetTextValue(4,11+i*7,elevator[find_cur_begin_number+i].Rated_Speed);
         if(elevator[find_cur_begin_number+i].Up_Result != 1 \
             &&elevator[find_cur_begin_number+i].Down_Result != 1)
         {
-            SetTextValue(4,12+i*7,"正常");
+            if(elevator[find_cur_begin_number+i].Up_Result == 0 \
+            &&elevator[find_cur_begin_number+i].Down_Result == 0)
+            {
+                SetTextValue(4,12+i*7,"\\");
+            }
+            else
+            {
+                SetTextValue(4,12+i*7,"正常"); 
+            }
+            
         }
         else
         {
@@ -408,6 +515,45 @@ void Show_screen_2(void)
     else if(elevator[current_number].Dir == 1)
         SetTextValue(2,8,"双向");
     SetTextValue(2,9,elevator[current_number].Rated_Speed);
+
+    if(elevator[current_number].Up_Result == 0)
+    {
+        SetTextValue(2,10,"\\");
+        SetTextValue(2,11,"\\");
+        SetTextValue(2,12,"\\");
+    }
+    else if(elevator[current_number].Up_Result == 2)
+    {
+        SetTextValue(2,10,elevator[current_number].Up_Elec_Speed);
+        SetTextValue(2,11, elevator[current_number].Up_Mach_Speed);
+        SetTextValue(2,12,"正常");
+    }
+    else 
+    {
+        SetTextValue(2,10,"\\");
+        SetTextValue(2,11,"\\");                            
+        SetTextValue(2,12,"异常");
+    }                            
+
+    if(elevator[current_number].Down_Result == 0)
+    {
+        SetTextValue(2,13,"\\");
+        SetTextValue(2,14,"\\");
+        SetTextValue(2,15,"\\");
+
+    }
+    else if(elevator[current_number].Down_Result == 2)
+    {
+        SetTextValue(2,13,elevator[current_number].Down_Elec_Speed);
+        SetTextValue(2,14,elevator[current_number].Down_Mach_Speed);                           
+        SetTextValue(2,15,"正常");
+    }
+    else
+    {
+        SetTextValue(2,13,"\\");
+        SetTextValue(2,14,"\\");
+        SetTextValue(2,15,"异常");
+    }                                              
 }
 
 /*! 
@@ -420,53 +566,13 @@ void Show_screen_2(void)
 
 static void NotifyButton(uint16 screen_id, uint16 control_id, uint8  state)
 {
-    unsigned char start_value[5] = {0,8,16,24,32};
+    unsigned char value = 0; //就单单显示开始的速度0
+    unsigned char i = 0;
 	switch (screen_id)
     {
         case 2:
             switch(control_id)
             {
-                case 1:
-                    if(elevator[current_number].Up_Result == 0)
-                    {
-                        SetTextValue(2,10,"\\");
-                        SetTextValue(2,11,"\\");
-                        SetTextValue(2,12,"\\");
-                    }
-                    else if(elevator[current_number].Up_Result == 2)
-                    {
-                        SetTextValue(2,10,elevator[current_number].Up_Elec_Speed);
-                        SetTextValue(2,11, elevator[current_number].Up_Mach_Speed);
-                        SetTextValue(2,12,"正常");
-                    }
-                    else 
-                    {
-                        SetTextValue(2,10,"\\");
-                        SetTextValue(2,11,"\\");                            
-                        SetTextValue(2,12,"异常");
-                    }                            
-                    break;
-                case 2:
-                    if(elevator[current_number].Down_Result == 0)
-                    {
-                        SetTextValue(2,13,"\\");
-                        SetTextValue(2,14,"\\");
-                        SetTextValue(2,15,"\\");
-       
-                    }
-                    else if(elevator[current_number].Down_Result == 2)
-                    {
-                        SetTextValue(2,13,elevator[current_number].Down_Elec_Speed);
-                        SetTextValue(2,14,elevator[current_number].Down_Mach_Speed);                           
-                        SetTextValue(2,15,"正常");
-                    }
-                    else
-                    {
-                        SetTextValue(2,13,"\\");
-                        SetTextValue(2,14,"\\");
-                        SetTextValue(2,15,"异常");
-                    }                            
-                    break;
                 case 3:
                     Run_Print();
                     break;
@@ -476,7 +582,13 @@ static void NotifyButton(uint16 screen_id, uint16 control_id, uint8  state)
             switch(control_id)
             {
                 case 4:
+                    find_begin_number = -1;
+                    find_cur_begin_number = -1;
+                    find_cur_end_number = -1;
+                    find_end_number = -1;
+                    for(i=6; i<=33; i++) SetTextValue(4,i,"\0");
                     Find();
+                    Find_flag = -1;//查找完之后就将标志恢复默认
                     if(find_begin_number != -1)
                     {
                         find_cur_begin_number = find_begin_number;
@@ -530,20 +642,26 @@ static void NotifyButton(uint16 screen_id, uint16 control_id, uint8  state)
                     Show_screen_2();
                     break;
                 case 38://下拉
-                    if(find_cur_end_number != find_end_number)
+                    if(find_begin_number != -1)
                     {
-                        find_cur_begin_number++;
-                        find_cur_end_number++;
+                        if(find_cur_end_number != find_end_number)
+                        {
+                            find_cur_begin_number++;
+                            find_cur_end_number++;
+                        }
+                        List_Show();
                     }
-                    List_Show();
                     break;
                 case 39://上拉
-                    if(find_cur_begin_number != find_begin_number)
+                    if(find_begin_number != -1)
                     {
-                        find_cur_begin_number--;
-                        find_cur_end_number--;
+                        if(find_cur_begin_number != find_begin_number)
+                        {
+                            find_cur_begin_number--;
+                            find_cur_end_number--;
+                        }
+                        List_Show();
                     }
-                    List_Show();
                     break;
                 default:
                     break;
@@ -555,27 +673,50 @@ static void NotifyButton(uint16 screen_id, uint16 control_id, uint8  state)
                 case 9:
                     if(state == 1)
                     {
-                        open_motor(); 
-                        current_show_speed = 0.5;//开始电机设置速度为1m/s
+                        for(i=1; i<=8; i++) SetTextValue(5,i,"\0");
+                        delay_ms(1000);
+                        delay_ms(1000);
+                        
+                        old_Speed = 0;
                         motor_open_flag = 1;
+                        start_duty = (unsigned int)(Rated_Speed * 10000);
+
                         if(dir_flag == 0)
                         {
-                            GraphChannelDataAdd(5,14,0,start_value,5);  
+                            motor_rev();
+                            set_motor_rev_speed(8000);
                         }
                         else
                         {
-                            GraphChannelDataAdd(5,15,0,start_value,5);
+                            motor_fwd();
+                            set_motor_fwd_speed(8000);
+                        }
+                        open_motor(); 
+                        delay_ms(10);//让电机先启动
+                        if(dir_flag == 0)
+                        {
+                            motor_rev();
+                            set_motor_rev_speed(start_duty);
+                            GraphChannelDataClear(5,14,0);
+                            GraphChannelDataAdd(5,14,0,&value,1);  
+                        }
+                        else
+                        {
+                            motor_fwd();
+                            set_motor_fwd_speed(start_duty);
+                            GraphChannelDataClear(5,15,0);
+                            GraphChannelDataAdd(5,15,0,&value,1);
                         }
                     }
                     else
                     {
-                        motor_stop();
+                        close_motor();
                         motor_open_flag = 0;
                     }
                     break;
                 case 10:
-                    STMFLASH_Write(PARAM_SAVE_ADDR + &elevator[current_number] - &elevator[0],\
-                                  (uint16_t *)&elevator[current_number],sizeof(elevator[0])/2);
+                    STMFLASH_Write(PARAM_SAVE_ADDR,(uint16_t *)&elevator[0],sizeof(elevator[0])/2*100);
+                    head.end_number = current_number;
                     if(head.end_number == 99 && head.begin_number == 0)
                     {
                         head.end_number = 0;
@@ -642,6 +783,18 @@ static void NotifyText(uint16 screen_id, uint16 control_id, uint8 *str)
                 case 5:
                     memcpy(elevator[current_number].Rated_Speed,(const char *)str,len);
                     elevator[current_number].Rated_Speed[len] = '\0';
+                    Rated_Speed = atof(elevator[current_number].Rated_Speed);
+                    if(Rated_Speed < 1.01)
+                    {
+                        Min_Speed = 1.15 * Rated_Speed;
+                        Max_Speed = 1.5 * Rated_Speed;
+                    }
+                    else 
+                    {
+                        Min_Speed = 1.15 * Rated_Speed;
+                        Max_Speed = 1.25 * Rated_Speed + 0.25/Rated_Speed;
+                    }
+                    
                 break;
                 default:
                     break;
@@ -651,19 +804,31 @@ static void NotifyText(uint16 screen_id, uint16 control_id, uint8 *str)
             switch(control_id)
             {
                 case 1:
-                    memcpy(Match_Register_Code,(const char *)str,len);
-                    Match_Register_Code[len] = '\0';
-                    Find_flag = 0;
+                    if(len != 0)
+                    {
+                        memcpy(Match_Register_Code,(const char *)str,len);
+                        Match_Register_Code[len] = '\0';
+                        Find_flag = 0;
+                    }
+                    else if(Find_flag == 0) Find_flag = -1;
                     break;
                 case 2:
-                    memcpy(Match_Factory_Numbe,(const char *)str,len);
-                    Match_Factory_Numbe[len] = '\0';
-                    Find_flag = 1;
+                    if(len != 0)
+                    {
+                        memcpy(Match_Factory_Numbe,(const char *)str,len);
+                        Match_Factory_Numbe[len] = '\0';
+                        Find_flag = 1;
+                    }
+                    else if(Find_flag == 1) Find_flag = -1;
                     break;
                 case 3:
-                    memcpy(Match_Date,(const char *)str,len);
-                    Match_Date[len] = '\0';
-                    Find_flag = 2;
+                    if(len != 0)
+                    {
+                        memcpy(Match_Date,(const char *)str,len);
+                        Match_Date[len] = '\0';
+                        Find_flag = 2;
+                    }
+                    else if(Find_flag == 2) Find_flag = -1;
                     break;
                 default:
                     break;

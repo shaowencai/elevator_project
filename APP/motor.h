@@ -6,14 +6,14 @@
 #include "Pin.h"
 
 #define START_PWM_DUTY      1000//满占空比是10000 初始占空比
-#define DEFAULT_SET_SPEED   1000
+#define DEFAULT_SET_SPEED   1500
 
 typedef struct
 {
    Pin_T   pin;
    Exti_T  exti; 
    TimerT  timer;
-   uint16_t count; //定时器溢出溢出加1
+   uint16_t count; //定时器溢出溢出加1    现在临时用作脉冲计数
 }Motor_FeedBack;
 
 typedef struct
@@ -59,7 +59,7 @@ typedef struct
     Motor_Pid       pid;
     uint16_t        actul_speed;
     uint16_t        set_speed;
-    //uint16_t        rated_speed;//额定速度 单位（r/min）
+    //uint16_t        rated_speed;
 }Motor_dev;
 
 extern void motor_init(void);
@@ -70,7 +70,7 @@ extern void set_motor_rev_speed(uint16_t duty);
 extern void motor_fwd(void);
 extern void motor_rev(void);
 extern void motor_stop(void);
-
+float Get_motor_speed(void);
 float Get_Elec_Speed(void);
 float Get_Mach_Speed(void);
 //void Set_Motor_RatedSpeed(float speed);
@@ -78,7 +78,7 @@ float Get_Mach_Speed(void);
 //{
 //    motor1.rated_speed = (uint16_t)(speed * 1500);
 //}
-void Set_Motor_Speed(float speed);
+void Set_Motor_SetSpeed(float speed);
     
 
 #endif

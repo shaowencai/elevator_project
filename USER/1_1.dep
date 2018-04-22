@@ -60,7 +60,7 @@ I (..\STM32F10x_FWLib\inc\stm32f10x_tim.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\stm32f10x_usart.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\stm32f10x_wwdg.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\misc.h)(0x5AA3D014)
-F (.\main.c)(0x5AC0ADDB)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\main.o --omf_browse ..\obj\main.crf --depend ..\obj\main.d)
+F (.\main.c)(0x5ADC2E71)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\main.o --omf_browse ..\obj\main.crf --depend ..\obj\main.d)
 I (..\driver\delay.h)(0x5AA3D014)
 I (..\USER\stm32f10x.h)(0x5AC08E02)
 I (..\CORE\core_cm3.h)(0x5AA3D014)
@@ -90,7 +90,7 @@ I (..\STM32F10x_FWLib\inc\stm32f10x_tim.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\stm32f10x_usart.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\stm32f10x_wwdg.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\misc.h)(0x5AA3D014)
-I (..\APP\motor.h)(0x5AC08288)
+I (..\APP\motor.h)(0x5AD2BB08)
 I (..\driver\hard_pwm.h)(0x5AA3D014)
 I (..\driver\timer.h)(0x5ABF32D1)
 I (..\driver\Pin.h)(0x5AA3D014)
@@ -102,8 +102,8 @@ I (..\HMI\hmi_driver.h)(0x5AC07D2C)
 I (..\HMI\cmd_queue.h)(0x5AA529FD)
 I (D:\MDK\ARM\ARMCC\include\stdio.h)(0x53463A44)
 I (..\driver\stmflash.h)(0x5AC0A1CA)
-F (..\APP\motor.c)(0x5AC08E45)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\motor.o --omf_browse ..\obj\motor.crf --depend ..\obj\motor.d)
-I (..\APP\motor.h)(0x5AC08288)
+F (..\APP\motor.c)(0x5AD31B0A)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\motor.o --omf_browse ..\obj\motor.crf --depend ..\obj\motor.d)
+I (..\APP\motor.h)(0x5AD2BB08)
 I (..\driver\hard_pwm.h)(0x5AA3D014)
 I (..\USER\stm32f10x.h)(0x5AC08E02)
 I (..\CORE\core_cm3.h)(0x5AA3D014)
@@ -135,7 +135,8 @@ I (..\STM32F10x_FWLib\inc\stm32f10x_wwdg.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\misc.h)(0x5AA3D014)
 I (..\driver\timer.h)(0x5ABF32D1)
 I (..\driver\Pin.h)(0x5AA3D014)
-F (..\APP\QR701_Printer.c)(0x5AC09BB8)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\qr701_printer.o --omf_browse ..\obj\qr701_printer.crf --depend ..\obj\qr701_printer.d)
+I (..\driver\delay.h)(0x5AA3D014)
+F (..\APP\QR701_Printer.c)(0x5AD1DB77)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\qr701_printer.o --omf_browse ..\obj\qr701_printer.crf --depend ..\obj\qr701_printer.d)
 I (..\APP\Printer.h)(0x5AA3D014)
 I (..\driver\usartx.h)(0x5AC09B6F)
 I (..\USER\stm32f10x.h)(0x5AC08E02)
@@ -167,7 +168,7 @@ I (..\STM32F10x_FWLib\inc\stm32f10x_usart.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\stm32f10x_wwdg.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\misc.h)(0x5AA3D014)
 I (..\driver\Pin.h)(0x5AA3D014)
-F (..\HMI\hmi_driver.c)(0x5AC0AC7D)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\hmi_driver.o --omf_browse ..\obj\hmi_driver.crf --depend ..\obj\hmi_driver.d)
+F (..\HMI\hmi_driver.c)(0x5ADB066C)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\hmi_driver.o --omf_browse ..\obj\hmi_driver.crf --depend ..\obj\hmi_driver.d)
 I (..\HMI\hmi_config.h)(0x5AA52A9F)
 I (..\HMI\hmi_driver.h)(0x5AC07D2C)
 I (..\driver\usartx.h)(0x5AC09B6F)
@@ -205,7 +206,7 @@ I (..\HMI\cmd_queue.h)(0x5AA529FD)
 F (..\HMI\cmd_queue.c)(0x5AA3D014)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\cmd_queue.o --omf_browse ..\obj\cmd_queue.crf --depend ..\obj\cmd_queue.d)
 I (..\HMI\hmi_config.h)(0x5AA52A9F)
 I (..\HMI\cmd_queue.h)(0x5AA529FD)
-F (..\HMI\hmi_process.c)(0x5AC0C59B)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\hmi_process.o --omf_browse ..\obj\hmi_process.crf --depend ..\obj\hmi_process.d)
+F (..\HMI\hmi_process.c)(0x5ADC4782)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\hmi_process.o --omf_browse ..\obj\hmi_process.crf --depend ..\obj\hmi_process.d)
 I (..\HMI\hmi_process.h)(0x5ABF1E7F)
 I (..\HMI\hmi_config.h)(0x5AA52A9F)
 I (..\HMI\hmi_driver.h)(0x5AC07D2C)
@@ -243,8 +244,9 @@ I (..\driver\timer.h)(0x5ABF32D1)
 I (..\HMI\cmd_queue.h)(0x5AA529FD)
 I (D:\MDK\ARM\ARMCC\include\stdio.h)(0x53463A44)
 I (D:\MDK\ARM\ARMCC\include\string.h)(0x53463A44)
+I (D:\MDK\ARM\ARMCC\include\stdlib.h)(0x53463A44)
 I (..\driver\delay.h)(0x5AA3D014)
-I (..\APP\motor.h)(0x5AC08288)
+I (..\APP\motor.h)(0x5AD2BB08)
 I (..\driver\hard_pwm.h)(0x5AA3D014)
 I (..\APP\printer.h)(0x5AA3D014)
 I (..\driver\stmflash.h)(0x5AC0A1CA)
@@ -398,7 +400,7 @@ I (..\STM32F10x_FWLib\inc\stm32f10x_tim.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\stm32f10x_usart.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\stm32f10x_wwdg.h)(0x5AA3D014)
 I (..\STM32F10x_FWLib\inc\misc.h)(0x5AA3D014)
-F (..\driver\timer.c)(0x5AC0AC3B)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\timer.o --omf_browse ..\obj\timer.crf --depend ..\obj\timer.d)
+F (..\driver\timer.c)(0x5AD2B033)(-c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork -I..\USER -I..\STM32F10x_FWLib\inc -I..\CORE -I..\APP -I..\driver -I..\HMI-I D:\MDK\ARM\RV31\INC-I D:\MDK\ARM\PACK\ARM\CMSIS\4.1.1\CMSIS\Include-I D:\MDK\ARM\Inc\ST\STM32F10x-DUSE_STDPERIPH_DRIVER -DSTM32F10X_MD-o ..\obj\timer.o --omf_browse ..\obj\timer.crf --depend ..\obj\timer.d)
 I (..\driver\timer.h)(0x5ABF32D1)
 I (..\USER\stm32f10x.h)(0x5AC08E02)
 I (..\CORE\core_cm3.h)(0x5AA3D014)

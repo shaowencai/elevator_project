@@ -7,7 +7,7 @@ void Timerx_Init(TimerT *timerT)
 	NVIC_InitTypeDef NVIC_InitStructure;
 
 	TIM_TimeBaseStructure.TIM_Period = timerT->TIM_Period; 
-	TIM_TimeBaseStructure.TIM_Prescaler =(72-1);//1us记一次数
+	TIM_TimeBaseStructure.TIM_Prescaler =(720-1);//10us记一次数
 	TIM_TimeBaseStructure.TIM_ClockDivision = 0; 
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
 	TIM_TimeBaseInit(timerT->TIMx, &TIM_TimeBaseStructure); 

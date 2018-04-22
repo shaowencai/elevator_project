@@ -3,16 +3,21 @@
 #include "cmd_queue.h"
 
 
+#define HMI_USART3 1
+#define HMI_USART1 0
 static Hmi_driverT hmi_driver =
 {
-//    {GPIO_Speed_50MHz,GPIO_Pin_10,GPIOB,GPIO_Mode_AF_PP,0},//TX_pin
-//    {GPIO_Speed_50MHz,GPIO_Pin_11,GPIOB,GPIO_Mode_IN_FLOATING,0},//Rx_pin
-//    
-//    {USART3,115200,USART_StopBits_1,USART_Parity_No,
-//#if USART_RX_IT
-//        USART3_IRQn
-//#endif
-//    },
+#if HMI_USART3 == 1
+    {GPIO_Speed_50MHz,GPIO_Pin_10,GPIOB,GPIO_Mode_AF_PP,0},//TX_pin
+    {GPIO_Speed_50MHz,GPIO_Pin_11,GPIOB,GPIO_Mode_IN_FLOATING,0},//Rx_pin
+    
+    {USART3,115200,USART_StopBits_1,USART_Parity_No,
+#if USART_RX_IT
+        USART3_IRQn
+#endif
+    },
+#endif
+#if  HMI_USART1 == 1
     {GPIO_Speed_50MHz,GPIO_Pin_9,GPIOA,GPIO_Mode_AF_PP,0},//TX_pin
     {GPIO_Speed_50MHz,GPIO_Pin_10,GPIOA,GPIO_Mode_IN_FLOATING,0},//Rx_pin
     
@@ -21,7 +26,8 @@ static Hmi_driverT hmi_driver =
         USART1_IRQn
 #endif
     },
-    {TIM2,TIM2_IRQn,60000},
+#endif
+    {TIM2,TIM2_IRQn,10000},//100ms
     0
 };
 
@@ -30,10 +36,15 @@ static void hmi_driver_rcc_config()
 {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);//复用引脚就需要使能AFIO时钟
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE); 
-//    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
-//    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+#if HMI_USART3 == 1
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+#endif
+    
+#if HMI_USART1 == 1
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+#endif
 }
 
 void  hmi_driver_init(void (*Updata_Fun)(void))
@@ -53,16 +64,19 @@ void SendChar(uchar t)
     hmi_driver.usart.Usartx->DR = (uchar)t;  
 }
 
+#if HMI_USART3 == 1
+void USART3_IRQHandler()
+{
+    uint8 data;
+    if(USART_GetITStatus(USART3,USART_IT_RXNE) != RESET)
+    {
+        data = USART_ReceiveData(USART3);
+        queue_push(data);
+    }
+}
+#endif
 
-//void USART3_IRQHandler()
-//{
-//    uint8 data;
-//    if(USART_GetITStatus(USART3,USART_IT_RXNE) != RESET)
-//    {
-//        data = USART_ReceiveData(USART3);
-//        queue_push(data);
-//    }
-//}
+#if HMI_USART1 == 1
 void USART1_IRQHandler()
 {
     uint8 data;
@@ -72,7 +86,7 @@ void USART1_IRQHandler()
         queue_push(data);
     }
 }
-
+#endif
 
 void TIM2_IRQHandler(void)   //TIM2中断
 {

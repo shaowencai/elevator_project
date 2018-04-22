@@ -32,3 +32,4 @@
 ..\obj\motor.o: ..\STM32F10x_FWLib\inc\misc.h
 ..\obj\motor.o: ..\driver\timer.h
 ..\obj\motor.o: ..\driver\Pin.h
+..\obj\motor.o: ..\driver\delay.h

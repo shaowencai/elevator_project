@@ -48,4 +48,10 @@ void SendStringToPrint(char *buf)
     }
 }
 
+void USART2_IRQHandler()
+{
+    if(USART_GetITStatus(USART2,USART_IT_RXNE) != RESET)
+    {
 
+    }
+}

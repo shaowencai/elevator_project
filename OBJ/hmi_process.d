@@ -37,6 +37,7 @@
 ..\obj\hmi_process.o: ..\HMI\cmd_queue.h
 ..\obj\hmi_process.o: D:\MDK\ARM\ARMCC\bin\..\include\stdio.h
 ..\obj\hmi_process.o: D:\MDK\ARM\ARMCC\bin\..\include\string.h
+..\obj\hmi_process.o: D:\MDK\ARM\ARMCC\bin\..\include\stdlib.h
 ..\obj\hmi_process.o: ..\driver\delay.h
 ..\obj\hmi_process.o: ..\APP\motor.h
 ..\obj\hmi_process.o: ..\driver\hard_pwm.h

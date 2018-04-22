@@ -4,6 +4,7 @@
 #include "hmi_process.h"
 #include "stmflash.h"
 
+ unsigned int a =1500;
 int main(void)
 {	   
     delay_init(); 
@@ -11,15 +12,30 @@ int main(void)
     Hmi_init();
     motor_init();
     printer_init();
+
+    
     while(1)
     {     
         Hmi_App_Run();
     }
 }
 
+//    motor_rev();
+//    open_motor();
+//    set_motor_rev_speed(8000);
+//        set_motor_rev_speed(a);
+//        a= a+500;
+//        delay_ms(1000);
+//        if(a >= 8000)close_motor();
+// Pin_T   a ={GPIO_Speed_50MHz,GPIO_Pin_8,GPIOB,GPIO_Mode_Out_PP,0};
 
-
-
+//    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB,ENABLE);
+//    Pin_Init(&a);
+//    GPIO_SetBits(a.GPIOx,a.pinx);
+//        GPIO_SetBits(a.GPIOx,a.pinx);
+//        delay_ms(1000);
+//        GPIO_ResetBits(a.GPIOx,a.pinx);
+//        delay_ms(1000);
 
 
 
